@@ -4,7 +4,6 @@
 
 library(readr)
 library(dplyr)
-library(plyr)
 library(ggplot2)
 library(lubridate)
 library(caret)
@@ -440,6 +439,8 @@ plot(prop_varex, xlab = "Principal Component",
 plot(cumsum(prop_varex), xlab = "Principal Component",
      ylab = "Cumulative Proportion of Variance Explained",
      type = "b")
+cumsum(prop_varex) #first 50 PCs explain 80%, firsts 62 PCs explain 85%, first 81PCs explain 90%
+sum(prop_varex[1:50]) #first 50 principal components explains 80% of the variation
 
 #PCA by building
 wifilocation_grouped_TI <- wifilocation_grouped %>% filter(BUILDINGID=="TI")
@@ -494,6 +495,10 @@ plot(cumsum(prop_varex_tc), xlab = "Principal Component TC",
 cumsum(prop_varex_tc)
 sum(prop_varex_tc[1:19]) #first 19 principal components explains 89.60% of the variation
 
+
+#nexts steps are to use principal components x to variables that are not WAPS in the datasets and use it for modeling
+
+
 #--------------------------------------FLOOR----------------------------------------------------
 #check max wap for floor
 table(wifilocation_grouped$max_wap,wifilocation_grouped$FLOOR) #each one predominates in 1 floor, some in more than one floor
@@ -501,7 +506,6 @@ wifilocation_grouped %>%
   group_by(max_wap,BUILDINGID,FLOOR) %>% 
   tally() #counts
 
-#Feature selection
 fitControl <- trainControl(method = "repeatedcv", number = 10, repeats = 3,
                            classProbs=TRUE)
 #floor_rf_max<- train(FLOOR~max_wap, 
@@ -537,7 +541,15 @@ wifilocation_validation_grouped_TI$max_wap <- factor(wifilocation_validation_gro
 three_floors <- c("Ground", "First" , "Second", "Third")
 wifilocation_grouped_TI$FLOOR <- factor(wifilocation_grouped_TI$FLOOR,levels=three_floors)
 wifilocation_validation_grouped_TI$FLOOR <- factor(wifilocation_validation_grouped_TI$FLOOR,levels=three_floors)
+#PCA
+WAPS <- grep("WAP",names(wifilocation_grouped_TI),value=TRUE)
+wifilocation_grouped_TI_pca <- data.frame(select(wifilocation_grouped_TI,-WAPS), pca_ti$x[,1:18])
+wifilocation_validation_grouped_TI_pca <- predict(pca_ti, newdata = wifilocation_validation_grouped_TI)
+wifilocation_validation_grouped_TI_pca <- wifilocation_validation_grouped_TI_pca[,1:18]
+wifilocation_validation_grouped_TI_pca <- data.frame(select(wifilocation_validation_grouped_TI,-WAPS), wifilocation_validation_grouped_TI_pca)
+all.equal(names(wifilocation_grouped_TI_pca), names(wifilocation_validation_grouped_TI_pca))#TRUE
 
+#Modelling
 fitControl <- trainControl(method = "repeatedcv", number = 10, repeats = 3,
                            classProbs=TRUE)
 set.seed(123)
@@ -559,10 +571,16 @@ set.seed(123)
 floor_rf_ti_all<- train(FLOOR~ .-USERID-LONGITUDE-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
                         data=wifilocation_grouped_TI, method="rf", trControl=fitControl,tuneLength = 10, ntree= 50)
 floor_rf_ti_all #Accuracy=.9895, kappa=0.9857
+set.seed(123)
+floor_rf_ti_pca<- train(FLOOR~ .-USERID-LONGITUDE-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+                        data=wifilocation_grouped_TI_pca, method="rf", trControl=fitControl,tuneLength = 10, ntree= 50)
+floor_rf_ti_pca #Accuracy=.97, kappa=0.96
+
 
 #use floor_rf_ti_all
 save(floor_rf_ti, file = "floor_rf_ti.rda")
 save(floor_rf_ti_all, file = "floor_rf_ti_all.rda")
+save(floor_rf_ti_pca, file = "floor_rf_ti_pca.rda")
 
 #Predictions floor using max_wap
 load("floor_rf_ti.rda")
@@ -576,7 +594,11 @@ predictions_floor_rf_ti_all<-predict(floor_rf_ti_all, wifilocation_validation_gr
 confusionMatrix(predictions_floor_rf_ti_all, wifilocation_validation_grouped_TI$FLOOR) 
 #Accuracy:0.9542, kappa:0.9352. 3 in the ground predicted at 3rd, 1 second predicted at ground.
 
-#### Improve with PCA?
+#Predictions floor using pca
+load("floor_rf_ti_pca.rda")
+predictions_floor_rf_ti_pca<-predict(floor_rf_ti_pca, wifilocation_validation_grouped_TI_pca)
+confusionMatrix(predictions_floor_rf_ti_pca, wifilocation_validation_grouped_TI_pca$FLOOR) 
+#Accuracy:0.94, kappa:0.91. 1 in the ground predicted at 2nd.
 
 
 #Floor for Building TC ------------------------------------------
@@ -586,6 +608,14 @@ length(setdiff(wifilocation_validation_grouped_TC$max_wap,wifilocation_grouped_T
 WAPS_TC <- unique(wifilocation_grouped_TC$max_wap)
 wifilocation_grouped_TC$max_wap <- factor(wifilocation_grouped_TC$max_wap,levels=WAPS_TC)
 wifilocation_validation_grouped_TI$max_wap <- factor(wifilocation_validation_grouped_TI$max_wap,levels=WAPS_TI)
+#PCA
+WAPS <- grep("WAP",names(wifilocation_grouped_TI),value=TRUE)
+wifilocation_grouped_TC_pca <- data.frame(select(wifilocation_grouped_TC,-WAPS), pca_tc$x[,1:19])
+wifilocation_validation_grouped_TC_pca <- predict(pca_tc, newdata = wifilocation_validation_grouped_TC)
+wifilocation_validation_grouped_TC_pca <- wifilocation_validation_grouped_TC_pca[,1:19]
+wifilocation_validation_grouped_TC_pca <- data.frame(select(wifilocation_validation_grouped_TC,-WAPS), wifilocation_validation_grouped_TC_pca)
+all.equal(names(wifilocation_grouped_TC_pca), names(wifilocation_validation_grouped_TC_pca))#TRUE
+
 
 fitControl <- trainControl(method = "repeatedcv", number = 10, repeats = 3,
                            classProbs=TRUE)
@@ -602,10 +632,15 @@ set.seed(123)
 floor_rf_tc_all<- train(FLOOR~ .-USERID-LONGITUDE-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
                         data=wifilocation_grouped_TC, method="rf", trControl=fitControl,tuneLength = 10, ntree= 50)
 floor_rf_tc_all #Accuracy=.9859, kappa=0.9816
+set.seed(123)
+floor_rf_tc_pca<- train(FLOOR~ .-USERID-LONGITUDE-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+                        data=wifilocation_grouped_TC_pca, method="rf", trControl=fitControl,tuneLength = 10, ntree= 50)
+floor_rf_tc_pca #Accuracy=.98, kappa=0.98
 
 #use floor_rf_ti_all
 save(floor_rf_tc_max, file = "floor_rf_tc_max.rda")
 save(floor_rf_tc_all, file = "floor_rf_tc_all.rda")
+save(floor_rf_tc_all, file = "floor_rf_tc_pca.rda")
 
 #Predictions floor using max_wap
 load("floor_rf_tc_max.rda")
@@ -619,9 +654,11 @@ predictions_floor_rf_tc_all<-predict(floor_rf_tc_all, wifilocation_validation_gr
 confusionMatrix(predictions_floor_rf_tc_all, wifilocation_validation_grouped_TC$FLOOR) 
 #Accuracy:0.8359, kappa:0.7778. 1 in the 4th predicted at 1st. 25+1 errors from the 4th, probably the spot with no training, and the phone 19.
 
-#### Improve with PCA?
-
-
+#Predictions floor using pca
+load("floor_rf_tc_pca.rda")
+predictions_floor_rf_tc_pca<-predict(floor_rf_tc_pca, wifilocation_validation_grouped_TC_pca)
+confusionMatrix(predictions_floor_rf_tc_pca, wifilocation_validation_grouped_TC_pca$FLOOR) 
+#Accuracy:0.8779, kappa:0.8335. all wear errors from the 4th floor
 
 
 #Floor for Building TD ------------------------------------------
@@ -635,6 +672,14 @@ wifilocation_validation_grouped_TD$max_wap <- factor(wifilocation_validation_gro
 three_floors <- c("Ground", "First" , "Second", "Third")
 wifilocation_grouped_TD$FLOOR <- factor(wifilocation_grouped_TD$FLOOR,levels=three_floors)
 wifilocation_validation_grouped_TD$FLOOR <- factor(wifilocation_validation_grouped_TD$FLOOR,levels=three_floors)
+#PCA
+WAPS <- grep("WAP",names(wifilocation_grouped_TD),value=TRUE)
+wifilocation_grouped_TD_pca <- data.frame(select(wifilocation_grouped_TD,-WAPS), pca_td$x[,1:19])
+wifilocation_validation_grouped_TD_pca <- predict(pca_td, newdata = wifilocation_validation_grouped_TD)
+wifilocation_validation_grouped_TD_pca <- wifilocation_validation_grouped_TD_pca[,1:19]
+wifilocation_validation_grouped_TD_pca <- data.frame(select(wifilocation_validation_grouped_TD,-WAPS), wifilocation_validation_grouped_TD_pca)
+all.equal(names(wifilocation_grouped_TD_pca), names(wifilocation_validation_grouped_TD_pca))#TRUE
+
 
 fitControl <- trainControl(method = "repeatedcv", number = 10, repeats = 3,
                            classProbs=TRUE)
@@ -651,10 +696,15 @@ set.seed(123)
 floor_rf_td_all<- train(FLOOR~ .-USERID-LONGITUDE-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
                         data=wifilocation_grouped_TD, method="rf", trControl=fitControl,tuneLength = 10, ntree= 50)
 floor_rf_td_all #Accuracy=.9592630, kappa=0.9452
+set.seed(123)
+floor_rf_td_pca<- train(FLOOR~ .-USERID-LONGITUDE-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+                        data=wifilocation_grouped_TD_pca, method="rf", trControl=fitControl,tuneLength = 10, ntree= 50)
+floor_rf_td_pca #Accuracy=.9585, kappa=0.944
 
 #use floor_rf_ti_all
 save(floor_rf_td_max, file = "floor_rf_td_max.rda")
 save(floor_rf_td_all, file = "floor_rf_td_all.rda")
+save(floor_rf_td_pca, file = "floor_rf_td_pca.rda")
 
 #Predictions floor using max_wap
 load("floor_rf_td_max.rda")
@@ -668,7 +718,36 @@ predictions_floor_rf_td_all<-predict(floor_rf_td_all, wifilocation_validation_gr
 confusionMatrix(predictions_floor_rf_td_all, wifilocation_validation_grouped_TD$FLOOR) 
 #Accuracy:0.772, kappa:0.6759.
 
-#### Improve with PCA?
+#Predictions floor using pca
+load("floor_rf_td_pca.rda")
+predictions_floor_rf_td_pca<-predict(floor_rf_td_pca, wifilocation_validation_grouped_TD_pca)
+confusionMatrix(predictions_floor_rf_td_pca, wifilocation_validation_grouped_TD_pca$FLOOR) 
+#Accuracy:0.7655, kappa:0.6644.
 
+#-------------------Floor all building together----------------------------------------------
+#PCA all together
+WAPS <- grep("WAP",names(wifilocation_grouped),value=TRUE)
+wifilocation_grouped_pca <- data.frame(select(wifilocation_grouped,-WAPS), pca$x[,1:50])
+wifilocation_validation_grouped_pca <- predict(pca, newdata = wifilocation_validation_grouped)
+wifilocation_validation_grouped_pca <- wifilocation_validation_grouped_pca[,1:50]
+wifilocation_validation_grouped_pca <- data.frame(select(wifilocation_validation_grouped,-WAPS), wifilocation_validation_grouped_pca)
+all.equal(names(wifilocation_grouped_pca), names(wifilocation_validation_grouped_pca))#TRUE
 
+#Modelling
+fitControl <- trainControl(method = "repeatedcv", number = 10, repeats = 3,
+                           classProbs=TRUE)
+set.seed(123)
+floor_rf_all<- train(FLOOR~ .-USERID-LONGITUDE-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+                        data=wifilocation_grouped, method="rf", trControl=fitControl,tuneLength = 10, ntree= 10)
+floor_rf_all #Accuracy=.96, kappa=0.95
+set.seed(123)
+floor_rf_pca<- train(FLOOR~ .-USERID-LONGITUDE-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+                        data=wifilocation_grouped_pca, method="rf", trControl=fitControl,tuneLength = 10, ntree= 10)
+floor_rf_pca #Accuracy=.93, kappa=0.90
+set.seed(123)
+floor_rf_pcab<- train(FLOOR~ .-USERID-LONGITUDE-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap, 
+                     data=wifilocation_grouped_pca, method="rf", trControl=fitControl,tuneLength = 10, ntree= 10)
+floor_rf_pcab #Accuracy=.93, kappa=0.90
+
+#----------------------------------------Longitude------------------------------------------------------------
 
