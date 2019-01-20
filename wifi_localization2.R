@@ -421,6 +421,10 @@ wap_floor <- (wifilocation_grouped[indices_wap,"FLOOR"])
 wap_loc <- cbind(wap_loc,wap_build)
 wap_loc <- cbind(wap_loc,wap_floor)
 table(wap_loc$BUILDINGID,wap_loc$FLOOR)
+#vectors with WAPS for each building
+WAPS_loc_TI <- row.names(wap_loc[wap_loc$BUILDINGID=="TI",])
+WAPS_loc_TD <- row.names(wap_loc[wap_loc$BUILDINGID=="TD",])
+WAPS_loc_TC <- row.names(wap_loc[wap_loc$BUILDINGID=="TC",])
 
 
 #-------------------------------------PCA----------------------------------------------------------
@@ -749,5 +753,134 @@ floor_rf_pcab<- train(FLOOR~ .-USERID-LONGITUDE-LATITUDE-SPACEID-RELATIVEPOSITIO
                      data=wifilocation_grouped_pca, method="rf", trControl=fitControl,tuneLength = 10, ntree= 10)
 floor_rf_pcab #Accuracy=.93, kappa=0.90
 
-#----------------------------------------Longitude------------------------------------------------------------
+#---------------------------------Longitude ----------------------------------------------------------
+#Subset by building, no need to take into account the floor because is not related with longitude/latitude.
+#For each building try, all WAPS, PCA and WAPS detected on that building.
 
+#-----Longitude TI-------------
+#PCA
+set.seed(123)
+lon_knn_ti_pca <- train(LONGITUDE ~ .-USERID-FLOOR-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+                          data = wifilocation_grouped_TI_pca, method = "knn", 
+                          preProc = c("center","scale"), tuneLength = 10,
+                          trControl = fitControl)
+lon_knn_ti_pca #RMSE=5.26, R=0.95, MAE=3.95
+set.seed(123)
+lon_rf_ti_pca <- train(LONGITUDE ~ .-USERID-FLOOR-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+                        data = wifilocation_grouped_TI_pca, method = "rf", 
+                        ntree=50, tuneLength = 10,
+                        trControl = fitControl)
+lon_rf_ti_pca #RMSE=5.77, R=0.95, MAE=4.12
+#all
+set.seed(123)
+lon_knn_ti_all <- train(LONGITUDE ~ .-USERID-FLOOR-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+                        data = wifilocation_grouped_TI, method = "knn", 
+                        preProc = c("center","scale"), tuneLength = 10,
+                        trControl = fitControl)
+lon_knn_ti_all #RMSE=6.33, R=0.94, MAE=4.65
+set.seed(123)
+lon_rf_ti_all <- train(LONGITUDE ~ .-USERID-FLOOR-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+                       data = wifilocation_grouped_TI, method = "rf", 
+                       ntree=50, tuneLength = 10,
+                       trControl = fitControl)
+lon_rf_ti_all #RMSE=5.94, R=0.95, MAE=4.4
+#only WAPS located at TI
+wifilocation_grouped_TI_waps <- data.frame(wifilocation_grouped_TI[,WAPS_loc_TI],wifilocation_grouped_TI[,"LONGITUDE"],
+                                           wifilocation_grouped_TI[,"LATITUDE"])
+set.seed(123)
+lon_knn_ti_waps <- train(LONGITUDE ~ .-LATITUDE, 
+                        data = wifilocation_grouped_TI_waps, method = "knn", 
+                        preProc = c("center","scale"), tuneLength = 10,
+                        trControl = fitControl)
+lon_knn_ti_waps #RMSE=6.80, R=0.93, MAE=4.95
+set.seed(123)
+lon_rf_ti_waps<- train(LONGITUDE ~ .-LATITUDE, 
+                       data = wifilocation_grouped_TI_waps, method = "rf", 
+                       ntree=50, tuneLength = 10,
+                       trControl = fitControl)
+lon_rf_ti_waps #RMSE=5.99, R=0.94, MAE=4.46
+
+#Tune using PCA
+set.seed(123)
+lon_gbm_ti_pca <- train(LONGITUDE ~ .-USERID-FLOOR-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+                       data = wifilocation_grouped_TI_pca, method = "gbm", 
+                       tuneLength = 10,
+                       trControl = fitControl)
+lon_gbm_ti_pca #RMSE=5.88, R=0.94, MAE=4.21
+set.seed(123)
+lon_svml_ti_pca <- train(LONGITUDE ~ .-USERID-FLOOR-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+                        data = wifilocation_grouped_TI_pca, method = "svmLinear", 
+                        tuneLength = 10,preProcess = c("center", "scale"),
+                        trControl = fitControl)
+lon_svml_ti_pca #RMSE=9.71, R=0.85, MAE=7.23
+set.seed(123)
+lon_svmr_ti_pca <- train(LONGITUDE ~ .-USERID-FLOOR-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+                         data = wifilocation_grouped_TI_pca, method = "svmRadial", 
+                         tuneLength = 10,preProcess = c("center", "scale"),
+                         trControl = fitControl)
+lon_svmr_ti_pca #RMSE=5.17, R=0.96, MAE=3.96
+#tune svmr
+grid_radial <- expand.grid(sigma = c(0,0.01, 0.02, 0.03, 0.04,0.05, 0.06, 0.07,0.08, 0.09, 0.1),
+                           C = c(2,4,8,16,32))
+set.seed(123)
+lon_svmr2_ti_pca <- train(LONGITUDE ~ .-USERID-FLOOR-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+                         data = wifilocation_grouped_TI_pca, method = "svmRadial", 
+                         tuneGrid = grid_radial,preProcess = c("center", "scale"),
+                         trControl = fitControl)
+lon_svmr2_ti_pca #RMSE=4.81, R=0.96, MAE=3.69
+
+#save models to test
+save(lon_knn_ti_pca, file = "lon_knn_ti_pca.rda")
+save(lon_svmr2_ti_pca, file = "lon_svmr2_ti_pca.rda")
+save(lon_rf_ti_pca, file = "lon_rf_ti_pca.rda")
+save(lon_gbm_ti_pca, file = "lon_gbm_ti_pca.rda")
+
+#longitude of TI knn
+load("lon_knn_ti_pca.rda")
+predictions_lon_knn_ti_pca <-predict(lon_knn_ti_pca, wifilocation_validation_grouped_TI_pca)
+postResample(predictions_lon_knn_ti_pca, wifilocation_validation_grouped_TI_pca$LONGITUDE) 
+#RMSE: 6.33, R:0.94, MAE=4.27
+ggplot(wifilocation_validation_grouped_TI, aes(x=LONGITUDE,y=LATITUDE)) +
+  ggtitle("Error knn")+
+  labs(x='Longitude', y='Latitude') +
+  geom_point(colour="grey")+
+  geom_point(aes(x=predictions_lon_knn_ti_pca,y=LATITUDE,colour="red"))
+#OK, maybe 1 or 2 points out of the building
+plot(predictions_lon_knn_ti_pca, wifilocation_validation_grouped_TI_pca$LONGITUDE)
+abline(a=0,b=1,col="red")
+
+#longitude of TI svmRadial
+load("lon_svmr2_ti_pca.rda")
+predictions_lon_svmr2_ti_pca <-predict(lon_svmr2_ti_pca, wifilocation_validation_grouped_TI_pca)
+postResample(predictions_lon_svmr2_ti_pca, wifilocation_validation_grouped_TI_pca$LONGITUDE) 
+#RMSE: 8.63, R:0.90, MAE=6.10
+ggplot(wifilocation_validation_grouped_TI, aes(x=LONGITUDE,y=LATITUDE)) +
+  ggtitle("Error svmr")+
+  labs(x='Longitude', y='Latitude') +
+  geom_point(colour="grey")+
+  geom_point(aes(x=predictions_lon_svmr2_ti_pca,y=LATITUDE,colour="red"))
+#some out, less overlay the knn
+
+#longitude of TI rf
+load("lon_rf_ti_pca.rda")
+predictions_lon_rf_ti_pca <-predict(lon_rf_ti_pca, wifilocation_validation_grouped_TI_pca)
+postResample(predictions_lon_rf_ti_pca, wifilocation_validation_grouped_TI_pca$LONGITUDE) 
+#RMSE: 7.51, R:0.92, MAE=5.10
+ggplot(wifilocation_validation_grouped_TI, aes(x=LONGITUDE,y=LATITUDE)) +
+  ggtitle("Error rf")+
+  labs(x='Longitude', y='Latitude') +
+  geom_point(colour="grey")+
+  geom_point(aes(x=predictions_lon_rf_ti_pca,y=LATITUDE,colour="red"))
+#good overlay, some places out
+
+#longitude of TI gbm
+load("lon_gbm_ti_pca.rda")
+predictions_lon_gbm_ti_pca <-predict(lon_gbm_ti_pca, wifilocation_validation_grouped_TI_pca)
+postResample(predictions_lon_gbm_ti_pca, wifilocation_validation_grouped_TI_pca$LONGITUDE) 
+#RMSE: 7.62, R:0.92, MAE=5.11
+ggplot(wifilocation_validation_grouped_TI, aes(x=LONGITUDE,y=LATITUDE)) +
+  ggtitle("Error gbm")+
+  labs(x='Longitude', y='Latitude') +
+  geom_point(colour="grey")+
+  geom_point(aes(x=predictions_lon_gbm_ti_pca,y=LATITUDE,colour="red"))
+#good overlay, some places out
