@@ -9,6 +9,8 @@ library(lubridate)
 library(caret)
 library(rpart.plot)
 library(randomForest)
+library(plotly)
+library(cowplot)
 
 #compare the two datasets WIFI and TEST to check if both are equal (column wise)
 columncompar <- function(x,y) {
@@ -71,6 +73,9 @@ hist(WAPSreceived_validation)
 hist(WAPSreceived, col=rgb(1,0,0,0.5))
 hist(WAPSreceived_validation, col=rgb(0,0,1,0.5), add=T)
 box()
+ggplot()+
+  geom_histogram(aes(WAPSreceived),fill="steelblue")+
+  geom_histogram(aes(WAPSreceived_validation),fill="green")+
 
 #explore longitude and latitude
 summary(wifilocation$LONGITUDE)
@@ -94,23 +99,75 @@ ggplot(wifilocation, aes(x=LONGITUDE,y=LATITUDE)) +
   ggtitle("Training set")+
   labs(x='Longitude', y='Latitude') +
   geom_point()+
-  facet_grid(FLOOR~BUILDINGID)+
-  theme_dark()
+  facet_grid(FLOOR ~ BUILDINGID )+
+  theme_gray()
 ggplot(wifilocation_validation, aes(x=LONGITUDE,y=LATITUDE)) +
   ggtitle("Validation set")+
   labs(x='Longitude', y='Latitude') +
   geom_point()+
-  facet_grid(FLOOR~BUILDINGID)+
-  theme_dark()
-#3D plots??
+  facet_grid(FLOOR ~ BUILDINGID)+
+  theme_gray()
+#  theme_dark()
+
+#3D plots
+plot_ly(wifilocation, x = ~LONGITUDE, y = ~LATITUDE, z = ~FLOOR) %>%
+  add_markers() %>%
+  layout(scene = list(xaxis = list(title = 'Longitude'),
+                      yaxis = list(title = 'Latitude'),
+                      zaxis = list(title = 'Floor')))
 
 #relative position
 table(wifilocation$RELATIVEPOSITION, wifilocation$BUILDINGID)
+
+#phoneID and USER
+table(wifilocation$PHONEID,wifilocation$USERID)
+
+t_13 <- ggplot(wifilocation,aes(x=LONGITUDE,y=LATITUDE)) +
+  ggtitle("Training Phone 13")+
+  labs(x='Longitude', y='Latitude') +
+  geom_point(color="grey")+
+  geom_point(data=wifilocation[wifilocation$PHONEID=="13",],color="red")+
+  facet_grid(FLOOR~.)
+#  theme_dark()
+v_13 <- ggplot(wifilocation_validation,aes(x=LONGITUDE,y=LATITUDE)) +
+  ggtitle("Validation Phone 13")+
+  labs(x='Longitude', y='Latitude') +
+  geom_point(color="grey")+
+  geom_point(data=wifilocation_validation[wifilocation_validation$PHONEID=="13",],color="red")+
+  facet_grid(FLOOR~.)
+plot_grid(t_13,v_13)
+t_14 <- ggplot(wifilocation,aes(x=LONGITUDE,y=LATITUDE)) +
+  ggtitle("Training Phone 14")+
+  labs(x='Longitude', y='Latitude') +
+  geom_point(color="grey")+
+  geom_point(data=wifilocation[wifilocation$PHONEID=="14",],color="red")+
+  facet_grid(FLOOR~.)
+#  theme_dark()
+v_14 <- ggplot(wifilocation_validation,aes(x=LONGITUDE,y=LATITUDE)) +
+  ggtitle("Validation Phone 14")+
+  labs(x='Longitude', y='Latitude') +
+  geom_point(color="grey")+
+  geom_point(data=wifilocation_validation[wifilocation_validation$PHONEID=="14",],color="red")+
+  facet_grid(FLOOR~.)
+plot_grid(t_14,v_14)
+
+ggplot(wifilocation,aes(x=LONGITUDE,y=LATITUDE)) +
+  ggtitle("Training Phone 19")+
+  labs(x='Longitude', y='Latitude') +
+  geom_point(color="grey")+
+  geom_point(data=wifilocation[wifilocation$PHONEID=="19",],color="red")+
+  facet_grid(FLOOR~.)
 
 #timestamp
 #see days the the records were taken
 table(date(wifilocation$TIMESTAMP))
 table(date(wifilocation_validation$TIMESTAMP))
+ggplot(wifilocation,aes(x=LONGITUDE,y=LATITUDE)) +
+  ggtitle("Training by days")+
+  labs(x='Longitude', y='Latitude') +
+  geom_point()+
+  facet_grid(FLOOR~as.factor(day(TIMESTAMP)))
+# all training for TC and TD same day, TI different days.
 
 #---------------------------------------------Data cleaning----------------------------------------------------
 #Remove WAPS only are in training or testing
@@ -151,6 +208,7 @@ ggplot(wifilocation, aes(x=LONGITUDE,y=LATITUDE)) +
 #do it further with grouped by location
 
 #frequency each WAP
+WAPS <- grep("WAP",names(wifilocation),value=TRUE)
 WAPSdetected <- apply(wifilocation[,WAPS],MARGIN=2,function(x) sum(x >=-80)) #39 WAPS all signals are lower than -80, 
 plot(sort(WAPSdetected))
 sum(WAPSdetected==0) #39 never detected
@@ -218,6 +276,12 @@ ggplot(wifilocation_validation, aes(x=LONGITUDE,y=LATITUDE)) +
 pos1 <- wifilocation %>% filter(LONGITUDE==wifilocation$LONGITUDE[1] & LATITUDE==wifilocation$LATITUDE[1] & FLOOR==wifilocation$FLOOR[1])
 summary(pos1$WAP090)
 summary(pos1$WAP172) #wide range, different signal all the WAPS.
+boxplot(pos1$WAP090 ~ pos1$PHONEID, main="WAP090 RSSI in the same location")
+boxplot(pos1$WAP172 ~ pos1$PHONEID,main="WAP090 RSSI in the same location", xlab=)
+ggplot(pos1,aes(PHONEID,WAP090))+
+  geom_boxplot()+
+  ggtitle("WAP090 RSSI at one location")+
+  labs(x="Phone ID", y="RSSI")
 
 wifilocation_grouped <- wifilocation %>% group_by(FLOOR,LONGITUDE,LATITUDE,BUILDINGID,SPACEID,RELATIVEPOSITION,USERID,PHONEID) %>% 
   summarise_at(vars(starts_with("WAP")),median)
@@ -233,7 +297,7 @@ wifilocation_validation_grouped <- wifilocation_validation %>% group_by(FLOOR,LO
   summarise_at(vars(starts_with("WAP")),median)
 #18 locations repeated.
 
-#remove first values >-30
+# values >-30
 higher30 <- wifilocation_grouped %>% filter_at(vars(starts_with("WAP")), any_vars(. >= -30))
 #3 locations phone7 and user14 
 #locate
@@ -249,18 +313,52 @@ ggplot(wifilocation_grouped, aes(x=LONGITUDE,y=LATITUDE)) +
 wifilocation_grouped %>% filter (PHONEID=="7") #129 locations (2/129 = 1.5% locations bad signall)
 
 #Low signals per fingerprint
-wifilocation_grouped %>% filter_at(vars(starts_with("WAP")), all_vars(. < -80)) #52 locations all values are <-80
-wifilocation_validation %>% filter_at(vars(starts_with("WAP")), all_vars(. < -80)) #14 all values are <-80
+wifilocation_grouped_low <- wifilocation_grouped %>% filter_at(vars(starts_with("WAP")), all_vars(. < -80)) #52 locations all values are <-80
+wifilocation_validation_grouped_low <- wifilocation_validation_grouped %>% filter_at(vars(starts_with("WAP")), all_vars(. < -80)) #14 all values are <-80
 #location:
 ggplot(wifilocation_grouped, aes(x=LONGITUDE,y=LATITUDE)) +
-  ggtitle("Low siganl fingerprints")+
+  ggtitle("Low sigal fingerprints in training")+
   labs(x='Longitude', y='Latitude') +
   geom_point(colour="grey")+
   geom_point(data=wifilocation_grouped_low,colour="red")+
   #  geom_point(data=wifilocation_validation_low,colour="green")+
-  facet_grid(FLOOR~BUILDINGID)+
-  theme_dark()
+  facet_grid(FLOOR~.)
+  #theme_dark()
+ggplot(wifilocation_validation_grouped, aes(x=LONGITUDE,y=LATITUDE)) +
+  ggtitle("Low sigal fingerprints in validation")+
+  labs(x='Longitude', y='Latitude') +
+  geom_point(colour="grey")+
+  geom_point(data=wifilocation_validation_grouped_low,colour="red")+
+  #  geom_point(data=wifilocation_validation_low,colour="green")+
+  facet_grid(FLOOR~.)
+#theme_dark()
 #---------add validation, suggest that they need more WAPs to cover the building
+#Rows with > 4 signals >-80 neede for good location
+WAPS <- grep("WAP",names(wifilocation_grouped),value=TRUE)
+sum(apply(wifilocation_grouped[,WAPS],MARGIN=1,function(x) (sum(x >=-80))>=4)) #1434 at least 4 points for 3D location
+sum(apply(wifilocation_grouped[,WAPS],MARGIN=1,function(x) (sum(x >=-80))>=3)) #1485 if we have the floor 3 points needed for location
+sum(apply(wifilocation_validation_grouped[,WAPS],MARGIN=1,function(x) (sum(x >=-80))>=4)) #979
+sum(apply(wifilocation_validation_grouped[,WAPS],MARGIN=1,function(x) (sum(x >=-80))>=3)) #1009
+#don't touch, don't remove anything because although the signal is weak may help locate in some place with poor reception
+
+wifilocation_low4 <- wifilocation_grouped[apply(wifilocation_grouped[,WAPS],MARGIN=1,function(x) (sum(x >=-80))<4),] #1434 at least 4 points for 3D location
+wifilocation_low3 <- wifilocation_grouped[apply(wifilocation_grouped[,WAPS],MARGIN=1,function(x) (sum(x >=-80))<3),] #1485 if we have the floor 3 points needed for location
+wifilocation_validation_low4 <- wifilocation_validation_grouped[apply(wifilocation_validation_grouped[,WAPS],MARGIN=1,function(x) (sum(x >=-80))<4),] 
+wifilocation_validation_low3 <- wifilocation_validation_grouped[apply(wifilocation_validation_grouped[,WAPS],MARGIN=1,function(x) (sum(x >=-80))<3),]
+
+ggplot(wifilocation_grouped, aes(x=LONGITUDE,y=LATITUDE)) +
+  ggtitle("Low sigal fingerprints")+
+  labs(x='Longitude', y='Latitude') +
+  geom_point(colour="grey")+
+  geom_point(data=wifilocation_validation_low3,aes(colour=">3"))+
+  geom_point(data=wifilocation_low3,aes(colour=">3"))+
+  geom_point(data=wifilocation_validation_low4,aes(colour=">4"))+
+  geom_point(data=wifilocation_low4,aes(colour=">4"))+
+  geom_point(data=wifilocation_validation_grouped_low,aes(colour="none"))+
+  geom_point(data=wifilocation_grouped_low,aes(colour="none"))+
+  scale_colour_manual(name="WAPs with RSSI > -80",values=c(">3"="yellow", ">4"="orange", "none"="red"))+
+  facet_grid(FLOOR~.)+
+  theme_gray()
 
 #new variable with max WAP, only 1 is necessary to know the building and the floor.
 WAPS <- grep("WAP",names(wifilocation),value=TRUE)
@@ -358,8 +456,6 @@ ggplot(wifilocation_grouped, aes(x=LONGITUDE,y=LATITUDE)) +
   geom_point(data=wifilocation_grouped[wifilocation_grouped$PHONEID=="1",],color="red")+
   facet_grid("PHONEID")+
   theme_dark()
-#plot_grid(plot.mpg, plot.diamonds, labels = "AUTO", ncol = 1, align = 'v')
-
 
 ggplot(wifilocation_validation, aes(x=LONGITUDE,y=LATITUDE,color=PHONEID)) +
   ggtitle("Training set grouped")+
@@ -391,7 +487,6 @@ rf_building_all<- train(BUILDINGID~.-FLOOR-USERID-LONGITUDE-LATITUDE-SPACEID-REL
 rf_building_all
 
 #save the models
-save(rf_building, file = "rf_building.rda")
 save(rf_building_max, file = "rf_building_max.rda")
 save(rf_building_all, file = "rf_building_all.rda")
 
@@ -400,13 +495,6 @@ load("rf_building_all.rda")
 predictions_building_rf_all<-predict(rf_building_all, newdata=wifilocation_validation_grouped) 
 confusionMatrix(predictions_building_rf_all, wifilocation_validation_grouped$BUILDINGID) 
 #1 error. Accuracy:0.9991, kappa:0.9986
-
-#Predictions with rf
-load("rf_building.rda")
-predictions_building_rf<-predict(rf_building, wifilocation_validation_grouped)
-confusionMatrix(predictions_building_rf, wifilocation_validation_grouped$BUILDINGID) 
-#9 error. Accuracy:0.9918, kappa:.987
-#Probably the 9 WAPS that appear in the validation and not in the training
 
 #Predictions with rf groomed max
 load("rf_building_max.rda")
@@ -468,9 +556,12 @@ prop_varex_ti <- pca_var_ti/sum(pca_var_ti) #proportion of variance explained
 plot(prop_varex_ti, xlab = "Principal Component TI",
      ylab = "Proportion of Variance Explained",
      type = "b")
-plot(cumsum(prop_varex_ti), xlab = "Principal Component TI",
+plot(cumsum(prop_varex_ti), xlab = "Principal Component",
      ylab = "Cumulative Proportion of Variance Explained",
+     main = "PCA for TI",
      type = "b")
+abline(h=0.9,v=18,col="red")
+
 cumsum(prop_varex_ti)
 sum(prop_varex_ti[1:18]) #first 18 principal components explains 89.45% of the variation
 
@@ -485,7 +576,9 @@ plot(prop_varex_td, xlab = "Principal Component TD",
      type = "b")
 plot(cumsum(prop_varex_td), xlab = "Principal Component TD",
      ylab = "Cumulative Proportion of Variance Explained",
+     main="PCA for TD",
      type = "b")
+abline(h=0.9,v=19,col="red")
 cumsum(prop_varex_td)
 sum(prop_varex_td[1:19]) #first 19 principal components explains 89.67% of the variation
 
@@ -500,7 +593,9 @@ plot(prop_varex_tc, xlab = "Principal Component TC",
      type = "b")
 plot(cumsum(prop_varex_tc), xlab = "Principal Component TC",
      ylab = "Cumulative Proportion of Variance Explained",
+     main="PCA for TC",
      type = "b")
+abline(h=0.9,v=19,col="red")
 cumsum(prop_varex_tc)
 sum(prop_varex_tc[1:19]) #first 19 principal components explains 89.60% of the variation
 
@@ -559,29 +654,29 @@ all.equal(names(wifilocation_grouped_TI_pca), names(wifilocation_validation_grou
 #Modelling
 fitControl <- trainControl(method = "repeatedcv", number = 10, repeats = 3,
                            classProbs=TRUE)
-set.seed(123)
-floor_rf_ti<- train(FLOOR~max_wap, data=wifilocation_grouped_TI, method="rf", trControl=fitControl,tuneLength = 10, ntree= 50)
-floor_rf_ti #Accuracy= 0.87, kappa=0.82
-set.seed(123)
-floor_knn_ti <- train(FLOOR ~ max_wap, 
-  data = wifilocation_grouped_TI, method = "knn", 
-  preProc = c("center","scale"), tuneLength = 10,
-  trControl = fitControl)
-floor_knn_ti #Accuracy=0.77, kappa=0.7
-set.seed(123)
-floor_knn_ti_all <- train(FLOOR ~ .-USERID-LONGITUDE-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
-                      data = wifilocation_grouped_TI, method = "knn", 
-                      preProc = c("center","scale"), tuneLength = 10,
-                      trControl = fitControl)
-floor_knn_ti_all #Accuracy=0.8868, kappa=0.84844
-set.seed(123)
-floor_rf_ti_all<- train(FLOOR~ .-USERID-LONGITUDE-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
-                        data=wifilocation_grouped_TI, method="rf", trControl=fitControl,tuneLength = 10, ntree= 50)
-floor_rf_ti_all #Accuracy=.9895, kappa=0.9857
-set.seed(123)
-floor_rf_ti_pca<- train(FLOOR~ .-USERID-LONGITUDE-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
-                        data=wifilocation_grouped_TI_pca, method="rf", trControl=fitControl,tuneLength = 10, ntree= 50)
-floor_rf_ti_pca #Accuracy=.97, kappa=0.96
+#set.seed(123)
+#floor_rf_ti<- train(FLOOR~max_wap, data=wifilocation_grouped_TI, method="rf", trControl=fitControl,tuneLength = 10, ntree= 50)
+#floor_rf_ti #Accuracy= 0.87, kappa=0.82
+#set.seed(123)
+#floor_knn_ti <- train(FLOOR ~ max_wap, 
+#  data = wifilocation_grouped_TI, method = "knn", 
+#  preProc = c("center","scale"), tuneLength = 10,
+#  trControl = fitControl)
+#floor_knn_ti #Accuracy=0.77, kappa=0.7
+#set.seed(123)
+#floor_knn_ti_all <- train(FLOOR ~ .-USERID-LONGITUDE-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+#                      data = wifilocation_grouped_TI, method = "knn", 
+#                      preProc = c("center","scale"), tuneLength = 10,
+#                      trControl = fitControl)
+#floor_knn_ti_all #Accuracy=0.8868, kappa=0.84844
+#set.seed(123)
+#floor_rf_ti_all<- train(FLOOR~ .-USERID-LONGITUDE-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+#                        data=wifilocation_grouped_TI, method="rf", trControl=fitControl,tuneLength = 10, ntree= 50)
+#floor_rf_ti_all #Accuracy=.9895, kappa=0.9857
+#set.seed(123)
+#floor_rf_ti_pca<- train(FLOOR~ .-USERID-LONGITUDE-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+#                        data=wifilocation_grouped_TI_pca, method="rf", trControl=fitControl,tuneLength = 10, ntree= 50)
+#floor_rf_ti_pca #Accuracy=.97, kappa=0.96
 
 
 #use floor_rf_ti_all
@@ -629,7 +724,8 @@ ggplot(wifilocation_validation_grouped_TI, aes(x=LONGITUDE,y=LATITUDE,color=FLOO
 TI_floor_error <- wifilocation_validation_grouped_TI %>%
   filter (FLOOR_error!=0) %>%
   select(FLOOR_error,max_val,max_wap,PHONEID)
-#Most PhoneID = 20 (10/33) and phoneid= 0 (Celkon)
+summary(TI_floor_error$PHONEID)
+#Most PhoneID = 20 (10/33) and phoneid= 0 (Celkon) (9/33)
 summary(wifilocation_grouped_TI$PHONEID) #Only lectures taken with 13 and 14., also no lectures with these phones in the training
 
 #Floor for Building TC ------------------------------------------
@@ -648,47 +744,47 @@ wifilocation_validation_grouped_TC_pca <- data.frame(select(wifilocation_validat
 all.equal(names(wifilocation_grouped_TC_pca), names(wifilocation_validation_grouped_TC_pca))#TRUE
 
 
-fitControl <- trainControl(method = "repeatedcv", number = 10, repeats = 3,
-                           classProbs=TRUE)
-set.seed(123)
-floor_rf_tc_max<- train(FLOOR~max_wap, data=wifilocation_grouped_TC, method="rf", trControl=fitControl,tuneLength = 10, ntree= 50)
-floor_rf_tc_max #Accuracy= 0.9243, kappa=0.9025
+#fitControl <- trainControl(method = "repeatedcv", number = 10, repeats = 3,
+#                           classProbs=TRUE)
+#set.seed(123)
+#floor_rf_tc_max<- train(FLOOR~max_wap, data=wifilocation_grouped_TC, method="rf", trControl=fitControl,tuneLength = 10, ntree= 50)
+#floor_rf_tc_max #Accuracy= 0.9243, kappa=0.9025
 
 #tune RF with different number trees
-model_RF_floor_TC_max <- list() #create a list of models
-for (ntree in c(10, 20, 50, 100, 500)) {  #for each number of trees
-  set.seed(123)
-  fit <- train(FLOOR~max_wap, data=wifilocation_grouped_TC, method="rf", trControl=fitControl,tuneLength = 10, ntree= ntree)
-  key <- toString(ntree) #transform number of trees to string
-  model_RF_floor_TC_max[[key]] <- fit #name each model and store it a variable of model_RF
-}
+#model_RF_floor_TC_max <- list() #create a list of models
+#for (ntree in c(10, 20, 50, 100, 500)) {  #for each number of trees
+#  set.seed(123)
+#  fit <- train(FLOOR~max_wap, data=wifilocation_grouped_TC, method="rf", trControl=fitControl,tuneLength = 10, ntree= ntree)
+#  key <- toString(ntree) #transform number of trees to string
+#  model_RF_floor_TC_max[[key]] <- fit #name each model and store it a variable of model_RF
+#}
 #compare results
-model_RF_floor_TC_max[["10"]] #Accuracy=0.92  kappa=0.90
-model_RF_floor_TC_max[["20"]] #Accuracy= 0.92 kappa=0.90
-model_RF_floor_TC_max[["50"]] #Accuracy= 0.92 kappa=0.90
-model_RF_floor_TC_max[["100"]] #Accuracy= 0.93 kappa=0.90
-model_RF_floor_TC_max[["500"]] #Accuracy= 0.93 kappa=0.90
+#model_RF_floor_TC_max[["10"]] #Accuracy=0.92  kappa=0.90
+#model_RF_floor_TC_max[["20"]] #Accuracy= 0.92 kappa=0.90
+#model_RF_floor_TC_max[["50"]] #Accuracy= 0.92 kappa=0.90
+#model_RF_floor_TC_max[["100"]] #Accuracy= 0.93 kappa=0.90
+#model_RF_floor_TC_max[["500"]] #Accuracy= 0.93 kappa=0.90
 ##100 trees is the best
-floor_rf2_tc_max <- model_RF_floor_TC_max[["100"]]
-set.seed(123)
-floor_gbm_tc_max <- train(FLOOR~max_wap, data=wifilocation_grouped_TC, method = "gbm", 
-                        tuneLength = 10,
-                        trControl = fitControl)
-floor_gbm_tc_max #Accuracy=0.83   kappa=0.78
-set.seed(123)
-floor_knn_tc_max <- train(FLOOR ~ max_wap, 
-                      data = wifilocation_grouped_TC, method = "knn", 
-                      preProc = c("center","scale"), tuneLength = 10,
-                      trControl = fitControl)
-floor_knn_tc_max #Accuracy=0.8997, kappa=0.8708
-set.seed(123)
-floor_rf_tc_all<- train(FLOOR~ .-USERID-LONGITUDE-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
-                        data=wifilocation_grouped_TC, method="rf", trControl=fitControl,tuneLength = 10, ntree= 50)
-floor_rf_tc_all #Accuracy=.9859, kappa=0.9816
-set.seed(123)
-floor_rf_tc_pca<- train(FLOOR~ .-USERID-LONGITUDE-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
-                        data=wifilocation_grouped_TC_pca, method="rf", trControl=fitControl,tuneLength = 10, ntree= 50)
-floor_rf_tc_pca #Accuracy=.98, kappa=0.98
+#floor_rf2_tc_max <- model_RF_floor_TC_max[["100"]]
+#set.seed(123)
+#floor_gbm_tc_max <- train(FLOOR~max_wap, data=wifilocation_grouped_TC, method = "gbm", 
+#                        tuneLength = 10,
+#                        trControl = fitControl)
+#floor_gbm_tc_max #Accuracy=0.83   kappa=0.78
+#set.seed(123)
+#floor_knn_tc_max <- train(FLOOR ~ max_wap, 
+#                      data = wifilocation_grouped_TC, method = "knn", 
+#                      preProc = c("center","scale"), tuneLength = 10,
+#                      trControl = fitControl)
+#floor_knn_tc_max #Accuracy=0.8997, kappa=0.8708
+#set.seed(123)
+#floor_rf_tc_all<- train(FLOOR~ .-USERID-LONGITUDE-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+#                        data=wifilocation_grouped_TC, method="rf", trControl=fitControl,tuneLength = 10, ntree= 50)
+#floor_rf_tc_all #Accuracy=.9859, kappa=0.9816
+#set.seed(123)
+#floor_rf_tc_pca<- train(FLOOR~ .-USERID-LONGITUDE-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+#                        data=wifilocation_grouped_TC_pca, method="rf", trControl=fitControl,tuneLength = 10, ntree= 50)
+#floor_rf_tc_pca #Accuracy=.98, kappa=0.98
 
 #use floor_rf_ti_all
 save(floor_rf_tc_max, file = "floor_rf_tc_max.rda")
@@ -800,48 +896,48 @@ wifilocation_validation_grouped_TD_pca <- data.frame(select(wifilocation_validat
 all.equal(names(wifilocation_grouped_TD_pca), names(wifilocation_validation_grouped_TD_pca))#TRUE
 
 
-fitControl <- trainControl(method = "repeatedcv", number = 10, repeats = 3,
-                           classProbs=TRUE)
-set.seed(123)
-floor_rf_td_max<- train(FLOOR~max_wap, data=wifilocation_grouped_TD, method="rf", trControl=fitControl,tuneLength = 10, ntree= 50)
-floor_rf_td_max #Accuracy= 0.9077609, kappa=0.8760174
+#fitControl <- trainControl(method = "repeatedcv", number = 10, repeats = 3,
+#                           classProbs=TRUE)
+#set.seed(123)
+#floor_rf_td_max<- train(FLOOR~max_wap, data=wifilocation_grouped_TD, method="rf", trControl=fitControl,tuneLength = 10, ntree= 50)
+#floor_rf_td_max #Accuracy= 0.9077609, kappa=0.8760174
 #tune RF with different number trees
-model_RF_floor_TD_max <- list() #create a list of models
-for (ntree in c(10, 20, 50, 100, 500)) {  #for each number of trees
-  set.seed(123)
-  fit <- train(FLOOR~max_wap, data=wifilocation_grouped_TD, method="rf", trControl=fitControl,tuneLength = 10, ntree= ntree)
-  key <- toString(ntree) #transform number of trees to string
-  model_RF_floor_TD_max[[key]] <- fit #name each model and store it a variable of model_RF
-}
+#model_RF_floor_TD_max <- list() #create a list of models
+#for (ntree in c(10, 20, 50, 100, 500)) {  #for each number of trees
+#  set.seed(123)
+#  fit <- train(FLOOR~max_wap, data=wifilocation_grouped_TD, method="rf", trControl=fitControl,tuneLength = 10, ntree= ntree)
+#  key <- toString(ntree) #transform number of trees to string
+#  model_RF_floor_TD_max[[key]] <- fit #name each model and store it a variable of model_RF
+#}
 #compare results
-model_RF_floor_TD_max[["10"]] #Accuracy=0.90  kappa=0.86
-model_RF_floor_TD_max[["20"]] #Accuracy= 0.90 kappa=0.87
-model_RF_floor_TD_max[["50"]] #Accuracy= 0.90 kappa=0.87
-model_RF_floor_TD_max[["100"]] #Accuracy= 0.90 kappa=0.87
-model_RF_floor_TD_max[["500"]] #Accuracy= 0.90 kappa=0.87
+#model_RF_floor_TD_max[["10"]] #Accuracy=0.90  kappa=0.86
+#model_RF_floor_TD_max[["20"]] #Accuracy= 0.90 kappa=0.87
+#model_RF_floor_TD_max[["50"]] #Accuracy= 0.90 kappa=0.87
+#model_RF_floor_TD_max[["100"]] #Accuracy= 0.90 kappa=0.87
+#model_RF_floor_TD_max[["500"]] #Accuracy= 0.90 kappa=0.87
 ##all the same
 
-set.seed(123)
-floor_gbm_td_max <- train(FLOOR~max_wap, data=wifilocation_grouped_TD, method = "gbm", 
-                          tuneLength = 10,
-                          trControl = fitControl)
-floor_gbm_td_max #Accuracy=0.51   kappa=0.34
+#set.seed(123)
+#floor_gbm_td_max <- train(FLOOR~max_wap, data=wifilocation_grouped_TD, method = "gbm", 
+#                          tuneLength = 10,
+#                          trControl = fitControl)
+#floor_gbm_td_max #Accuracy=0.51   kappa=0.34
 
 
-set.seed(123)
-floor_knn_td_max <- train(FLOOR ~ max_wap, 
-                          data = wifilocation_grouped_TD, method = "knn", 
-                          preProc = c("center","scale"), tuneLength = 10,
-                          trControl = fitControl)
-floor_knn_td_max #Accuracy=0.7876, kappa=0.71213
-set.seed(123)
-floor_rf_td_all<- train(FLOOR~ .-USERID-LONGITUDE-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
-                        data=wifilocation_grouped_TD, method="rf", trControl=fitControl,tuneLength = 10, ntree= 50)
-floor_rf_td_all #Accuracy=.9592630, kappa=0.9452
-set.seed(123)
-floor_rf_td_pca<- train(FLOOR~ .-USERID-LONGITUDE-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
-                        data=wifilocation_grouped_TD_pca, method="rf", trControl=fitControl,tuneLength = 10, ntree= 50)
-floor_rf_td_pca #Accuracy=.9585, kappa=0.944
+#set.seed(123)
+#floor_knn_td_max <- train(FLOOR ~ max_wap, 
+#                          data = wifilocation_grouped_TD, method = "knn", 
+#                          preProc = c("center","scale"), tuneLength = 10,
+#                          trControl = fitControl)
+#floor_knn_td_max #Accuracy=0.7876, kappa=0.71213
+#set.seed(123)
+#floor_rf_td_all<- train(FLOOR~ .-USERID-LONGITUDE-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+#                        data=wifilocation_grouped_TD, method="rf", trControl=fitControl,tuneLength = 10, ntree= 50)
+#floor_rf_td_all #Accuracy=.9592630, kappa=0.9452
+#set.seed(123)
+#floor_rf_td_pca<- train(FLOOR~ .-USERID-LONGITUDE-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+#                        data=wifilocation_grouped_TD_pca, method="rf", trControl=fitControl,tuneLength = 10, ntree= 50)
+#floor_rf_td_pca #Accuracy=.9585, kappa=0.944
 
 #use floor_rf_ti_all
 save(floor_rf_td_max, file = "floor_rf_td_max.rda")
@@ -947,82 +1043,82 @@ floor_rf_pcab #Accuracy=.93, kappa=0.90
 
 #-----Longitude TI-------------
 #PCA
-set.seed(123)
-lon_knn_ti_pca <- train(LONGITUDE ~ .-USERID-FLOOR-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
-                          data = wifilocation_grouped_TI_pca, method = "knn", 
-                          preProc = c("center","scale"), tuneLength = 10,
-                          trControl = fitControl)
-lon_knn_ti_pca #RMSE=5.26, R=0.95, MAE=3.95
-set.seed(123)
-lon_knn2_ti_pca <- train(LONGITUDE ~ .-USERID-FLOOR-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
-                        data = wifilocation_grouped_TI_pca, method = "knn", 
-                        preProc = c("center","scale"), 
-                        tuneGrid = expand.grid(k=c(1:5)),
-                        trControl = fitControl)
-lon_knn2_ti_pca #RMSE=5.10, R=0.96, MAE=3.78
-set.seed(123)
-lon_rf_ti_pca <- train(LONGITUDE ~ .-USERID-FLOOR-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
-                        data = wifilocation_grouped_TI_pca, method = "rf", 
-                        ntree=50, tuneLength = 10,
-                        trControl = fitControl)
-lon_rf_ti_pca #RMSE=5.77, R=0.95, MAE=4.12
+#set.seed(123)
+#lon_knn_ti_pca <- train(LONGITUDE ~ .-USERID-FLOOR-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+#                          data = wifilocation_grouped_TI_pca, method = "knn", 
+#                          preProc = c("center","scale"), tuneLength = 10,
+#                          trControl = fitControl)
+#lon_knn_ti_pca #RMSE=5.26, R=0.95, MAE=3.95
+#set.seed(123)
+#lon_knn2_ti_pca <- train(LONGITUDE ~ .-USERID-FLOOR-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+#                        data = wifilocation_grouped_TI_pca, method = "knn", 
+#                        preProc = c("center","scale"), 
+#                        tuneGrid = expand.grid(k=c(1:5)),
+#                        trControl = fitControl)
+#lon_knn2_ti_pca #RMSE=5.10, R=0.96, MAE=3.78
+#set.seed(123)
+#lon_rf_ti_pca <- train(LONGITUDE ~ .-USERID-FLOOR-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+#                        data = wifilocation_grouped_TI_pca, method = "rf", 
+#                        ntree=50, tuneLength = 10,
+#                        trControl = fitControl)
+#lon_rf_ti_pca #RMSE=5.77, R=0.95, MAE=4.12
 #all
-set.seed(123)
-lon_knn_ti_all <- train(LONGITUDE ~ .-USERID-FLOOR-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
-                        data = wifilocation_grouped_TI, method = "knn", 
-                        preProc = c("center","scale"), tuneLength = 10,
-                        trControl = fitControl)
-lon_knn_ti_all #RMSE=6.33, R=0.94, MAE=4.65
-set.seed(123)
-lon_rf_ti_all <- train(LONGITUDE ~ .-USERID-FLOOR-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
-                       data = wifilocation_grouped_TI, method = "rf", 
-                       ntree=50, tuneLength = 10,
-                       trControl = fitControl)
-lon_rf_ti_all #RMSE=5.94, R=0.95, MAE=4.4
+#set.seed(123)
+#lon_knn_ti_all <- train(LONGITUDE ~ .-USERID-FLOOR-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+#                        data = wifilocation_grouped_TI, method = "knn", 
+#                        preProc = c("center","scale"), tuneLength = 10,
+#                        trControl = fitControl)
+#lon_knn_ti_all #RMSE=6.33, R=0.94, MAE=4.65
+#set.seed(123)
+#lon_rf_ti_all <- train(LONGITUDE ~ .-USERID-FLOOR-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+#                       data = wifilocation_grouped_TI, method = "rf", 
+#                       ntree=50, tuneLength = 10,
+#                       trControl = fitControl)
+#lon_rf_ti_all #RMSE=5.94, R=0.95, MAE=4.4
 #only WAPS located at TI
-wifilocation_grouped_TI_waps <- data.frame(wifilocation_grouped_TI[,WAPS_loc_TI],wifilocation_grouped_TI[,"LONGITUDE"],
-                                           wifilocation_grouped_TI[,"LATITUDE"])
-set.seed(123)
-lon_knn_ti_waps <- train(LONGITUDE ~ .-LATITUDE, 
-                        data = wifilocation_grouped_TI_waps, method = "knn", 
-                        preProc = c("center","scale"), tuneLength = 10,
-                        trControl = fitControl)
-lon_knn_ti_waps #RMSE=6.80, R=0.93, MAE=4.95
-set.seed(123)
-lon_rf_ti_waps<- train(LONGITUDE ~ .-LATITUDE, 
-                       data = wifilocation_grouped_TI_waps, method = "rf", 
-                       ntree=50, tuneLength = 10,
-                       trControl = fitControl)
-lon_rf_ti_waps #RMSE=5.99, R=0.94, MAE=4.46
+#wifilocation_grouped_TI_waps <- data.frame(wifilocation_grouped_TI[,WAPS_loc_TI],wifilocation_grouped_TI[,"LONGITUDE"],
+#                                           wifilocation_grouped_TI[,"LATITUDE"])
+#set.seed(123)
+#lon_knn_ti_waps <- train(LONGITUDE ~ .-LATITUDE, 
+#                        data = wifilocation_grouped_TI_waps, method = "knn", 
+#                        preProc = c("center","scale"), tuneLength = 10,
+#                        trControl = fitControl)
+#lon_knn_ti_waps #RMSE=6.80, R=0.93, MAE=4.95
+#set.seed(123)
+#lon_rf_ti_waps<- train(LONGITUDE ~ .-LATITUDE, 
+#                       data = wifilocation_grouped_TI_waps, method = "rf", 
+#                       ntree=50, tuneLength = 10,
+#                       trControl = fitControl)
+#lon_rf_ti_waps #RMSE=5.99, R=0.94, MAE=4.46
 
 #Tune using PCA
-set.seed(123)
-lon_gbm_ti_pca <- train(LONGITUDE ~ .-USERID-FLOOR-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
-                       data = wifilocation_grouped_TI_pca, method = "gbm", 
-                       tuneLength = 10,
-                       trControl = fitControl)
-lon_gbm_ti_pca #RMSE=5.88, R=0.94, MAE=4.21
-set.seed(123)
-lon_svml_ti_pca <- train(LONGITUDE ~ .-USERID-FLOOR-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
-                        data = wifilocation_grouped_TI_pca, method = "svmLinear", 
-                        tuneLength = 10,preProcess = c("center", "scale"),
-                        trControl = fitControl)
-lon_svml_ti_pca #RMSE=9.71, R=0.85, MAE=7.23
-set.seed(123)
-lon_svmr_ti_pca <- train(LONGITUDE ~ .-USERID-FLOOR-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
-                         data = wifilocation_grouped_TI_pca, method = "svmRadial", 
-                         tuneLength = 10,preProcess = c("center", "scale"),
-                         trControl = fitControl)
-lon_svmr_ti_pca #RMSE=5.17, R=0.96, MAE=3.96
+#set.seed(123)
+#lon_gbm_ti_pca <- train(LONGITUDE ~ .-USERID-FLOOR-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+#                       data = wifilocation_grouped_TI_pca, method = "gbm", 
+#                       tuneLength = 10,
+#                       trControl = fitControl)
+#lon_gbm_ti_pca #RMSE=5.88, R=0.94, MAE=4.21
+#set.seed(123)
+#lon_svml_ti_pca <- train(LONGITUDE ~ .-USERID-FLOOR-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+#                        data = wifilocation_grouped_TI_pca, method = "svmLinear", 
+#                        tuneLength = 10,preProcess = c("center", "scale"),
+#                        trControl = fitControl)
+#lon_svml_ti_pca #RMSE=9.71, R=0.85, MAE=7.23
+#set.seed(123)
+#lon_svmr_ti_pca <- train(LONGITUDE ~ .-USERID-FLOOR-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+#                         data = wifilocation_grouped_TI_pca, method = "svmRadial", 
+#                         tuneLength = 10,preProcess = c("center", "scale"),
+#                         trControl = fitControl)
+#lon_svmr_ti_pca #RMSE=5.17, R=0.96, MAE=3.96
 #tune svmr
-grid_radial <- expand.grid(sigma = c(0,0.01, 0.02, 0.03, 0.04,0.05, 0.06, 0.07,0.08, 0.09, 0.1),
-                           C = c(2,4,8,16,32))
-set.seed(123)
-lon_svmr2_ti_pca <- train(LONGITUDE ~ .-USERID-FLOOR-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
-                         data = wifilocation_grouped_TI_pca, method = "svmRadial", 
-                         tuneGrid = grid_radial,preProcess = c("center", "scale"),
-                         trControl = fitControl)
-lon_svmr2_ti_pca #RMSE=4.81, R=0.96, MAE=3.69
+#grid_radial <- expand.grid(sigma = c(0,0.01, 0.02, 0.03, 0.04,0.05, 0.06, 0.07,0.08, 0.09, 0.1),
+#                           C = c(2,4,8,16,32))
+#set.seed(123)
+#lon_svmr2_ti_pca <- train(LONGITUDE ~ .-USERID-FLOOR-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+#                         data = wifilocation_grouped_TI_pca, method = "svmRadial", 
+#                         tuneGrid = grid_radial,preProcess = c("center", "scale"),
+#                         trControl = fitControl)
+#lon_svmr2_ti_pca #RMSE=4.81, R=0.96, MAE=3.69
 
 #save models to test
 save(lon_knn_ti_pca, file = "lon_knn_ti_pca.rda")
@@ -1108,74 +1204,74 @@ ggplot(wifilocation_validation_grouped_TI, aes(x=LONGITUDE,y=LATITUDE,color=LONG
 
 #-----Latitude TI-------------
 #PCA
-set.seed(123)
-lat_knn_ti_pca <- train(LATITUDE ~ .-USERID-FLOOR-LONGITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
-                        data = wifilocation_grouped_TI_pca, method = "knn", 
-                        preProc = c("center","scale"), tuneLength = 10,
-                        trControl = fitControl)
-lat_knn_ti_pca #RMSE=4.81, R=0.98, MAE=3.56
-set.seed(123)
-lat_knn2_ti_pca <- train(LATITUDE ~ .-USERID-FLOOR-LONGITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
-                        data = wifilocation_grouped_TI_pca, method = "knn", 
-                        preProc = c("center","scale"), 
-                        tuneGrid = expand.grid(k=c(1:5)),
-                        trControl = fitControl)
-lat_knn2_ti_pca #Chooses k=5, the same model as before.
-set.seed(123)
-lat_rf_ti_pca <- train(LATITUDE ~ .-USERID-FLOOR-LONGITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
-                       data = wifilocation_grouped_TI_pca, method = "rf", 
-                       ntree=50, tuneLength = 10,
-                       trControl = fitControl)
-lat_rf_ti_pca #RMSE=4.78, R=0.98, MAE=3.33
+#set.seed(123)
+#lat_knn_ti_pca <- train(LATITUDE ~ .-USERID-FLOOR-LONGITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+#                        data = wifilocation_grouped_TI_pca, method = "knn", 
+#                        preProc = c("center","scale"), tuneLength = 10,
+#                        trControl = fitControl)
+#lat_knn_ti_pca #RMSE=4.81, R=0.98, MAE=3.56
+#set.seed(123)
+#lat_knn2_ti_pca <- train(LATITUDE ~ .-USERID-FLOOR-LONGITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+#                        data = wifilocation_grouped_TI_pca, method = "knn", 
+#                        preProc = c("center","scale"), 
+#                        tuneGrid = expand.grid(k=c(1:5)),
+#                        trControl = fitControl)
+#lat_knn2_ti_pca #Chooses k=5, the same model as before.
+#set.seed(123)
+#lat_rf_ti_pca <- train(LATITUDE ~ .-USERID-FLOOR-LONGITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+#                       data = wifilocation_grouped_TI_pca, method = "rf", 
+#                       ntree=50, tuneLength = 10,
+#                       trControl = fitControl)
+#lat_rf_ti_pca #RMSE=4.78, R=0.98, MAE=3.33
 #all
-set.seed(123)
-lat_knn_ti_all <- train(LATITUDE ~ .-USERID-FLOOR-LONGITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
-                        data = wifilocation_grouped_TI, method = "knn", 
-                        preProc = c("center","scale"), tuneLength = 10,
-                        trControl = fitControl)
-lat_knn_ti_all #RMSE=6.22, R=0.97, MAE=4.34
-set.seed(123)
-lat_rf_ti_all <- train(LATITUDE ~ .-USERID-FLOOR-LONGITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
-                       data = wifilocation_grouped_TI, method = "rf", 
-                       ntree=50, tuneLength = 10,
-                       trControl = fitControl)
-lat_rf_ti_all #RMSE=5.60, R=0.97, MAE=3.86
+#set.seed(123)
+#lat_knn_ti_all <- train(LATITUDE ~ .-USERID-FLOOR-LONGITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+#                        data = wifilocation_grouped_TI, method = "knn", 
+#                        preProc = c("center","scale"), tuneLength = 10,
+#                        trControl = fitControl)
+#lat_knn_ti_all #RMSE=6.22, R=0.97, MAE=4.34
+#set.seed(123)
+#lat_rf_ti_all <- train(LATITUDE ~ .-USERID-FLOOR-LONGITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+#                       data = wifilocation_grouped_TI, method = "rf", 
+#                       ntree=50, tuneLength = 10,
+#                       trControl = fitControl)
+#lat_rf_ti_all #RMSE=5.60, R=0.97, MAE=3.86
 #only WAPS located at TI
-set.seed(123)
-lat_knn_ti_waps <- train(LATITUDE ~ .-LONGITUDE, 
-                         data = wifilocation_grouped_TI_waps, method = "knn", 
-                         preProc = c("center","scale"), tuneLength = 10,
-                         trControl = fitControl)
-lat_knn_ti_waps #RMSE=6.25, R=0.97, MAE=4.36
-set.seed(123)
-lat_rf_ti_waps<- train(LATITUDE ~ .-LONGITUDE, 
-                       data = wifilocation_grouped_TI_waps, method = "rf", 
-                       ntree=50, tuneLength = 10,
-                       trControl = fitControl)
-lat_rf_ti_waps #RMSE=5.63, R=0.97, MAE=3.90
+#set.seed(123)
+#lat_knn_ti_waps <- train(LATITUDE ~ .-LONGITUDE, 
+#                         data = wifilocation_grouped_TI_waps, method = "knn", 
+#                         preProc = c("center","scale"), tuneLength = 10,
+#                         trControl = fitControl)
+#lat_knn_ti_waps #RMSE=6.25, R=0.97, MAE=4.36
+#set.seed(123)
+#lat_rf_ti_waps<- train(LATITUDE ~ .-LONGITUDE, 
+#                       data = wifilocation_grouped_TI_waps, method = "rf", 
+#                       ntree=50, tuneLength = 10,
+#                       trControl = fitControl)
+#lat_rf_ti_waps #RMSE=5.63, R=0.97, MAE=3.90
 
 #Tune using PCA
-set.seed(123)
-lat_gbm_ti_pca <- train(LATITUDE ~ .-USERID-FLOOR-LONGITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
-                        data = wifilocation_grouped_TI_pca, method = "gbm", 
-                        tuneLength = 10,
-                        trControl = fitControl)
-lat_gbm_ti_pca #RMSE=4.79, R=0.98, MAE=3.63
-set.seed(123)
-lat_svmr_ti_pca <- train(LATITUDE ~ .-USERID-FLOOR-LONGITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
-                         data = wifilocation_grouped_TI_pca, method = "svmRadial", 
-                         tuneLength = 10,preProcess = c("center", "scale"),
-                         trControl = fitControl)
-lat_svmr_ti_pca #RMSE=4.96, R=0.98, MAE=3.76
+#set.seed(123)
+#lat_gbm_ti_pca <- train(LATITUDE ~ .-USERID-FLOOR-LONGITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+#                        data = wifilocation_grouped_TI_pca, method = "gbm", 
+#                        tuneLength = 10,
+#                        trControl = fitControl)
+#lat_gbm_ti_pca #RMSE=4.79, R=0.98, MAE=3.63
+#set.seed(123)
+#lat_svmr_ti_pca <- train(LATITUDE ~ .-USERID-FLOOR-LONGITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+#                         data = wifilocation_grouped_TI_pca, method = "svmRadial", 
+#                         tuneLength = 10,preProcess = c("center", "scale"),
+#                         trControl = fitControl)
+#lat_svmr_ti_pca #RMSE=4.96, R=0.98, MAE=3.76
 #tune svmr
-grid_radial <- expand.grid(sigma = c(0,0.01, 0.02, 0.03, 0.04,0.05, 0.06, 0.07,0.08, 0.09, 0.1),
-                           C = c(2,4,8,16,32))
-set.seed(123)
-lat_svmr2_ti_pca <- train(LATITUDE ~ .-USERID-FLOOR-LONGITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
-                          data = wifilocation_grouped_TI_pca, method = "svmRadial", 
-                          tuneGrid = grid_radial,preProcess = c("center", "scale"),
-                          trControl = fitControl)
-lat_svmr2_ti_pca #RMSE=4.92, R=0.98, MAE=3.72
+#grid_radial <- expand.grid(sigma = c(0,0.01, 0.02, 0.03, 0.04,0.05, 0.06, 0.07,0.08, 0.09, 0.1),
+#                           C = c(2,4,8,16,32))
+#set.seed(123)
+#lat_svmr2_ti_pca <- train(LATITUDE ~ .-USERID-FLOOR-LONGITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+#                          data = wifilocation_grouped_TI_pca, method = "svmRadial", 
+#                          tuneGrid = grid_radial,preProcess = c("center", "scale"),
+#                          trControl = fitControl)
+#lat_svmr2_ti_pca #RMSE=4.92, R=0.98, MAE=3.72
 
 #save models to test
 save(lat_knn_ti_pca, file = "lat_knn_ti_pca.rda")
@@ -1271,7 +1367,7 @@ ggplot(wifilocation_validation_grouped_TI[order(wifilocation_validation_grouped_
   ggtitle("Errors in Longitude")+
   labs(x='Longitude', y='Latitude') +
   geom_segment(aes(xend=LONGITUDE_pred,yend=LATITUDE_pred),arrow=arrow(length = unit(0.02,"npc"),type = "closed")) +
-  scale_color_gradient2(high="red", low="blue",mid="white")+
+  scale_color_gradient2(high="red", low="blue")+
   theme_dark()+
   facet_wrap("FLOOR")
 
@@ -1282,69 +1378,69 @@ ggplot(wifilocation_validation_grouped_TI[order(wifilocation_validation_grouped_
 
 #-----Longitude TD-------------
 #PCA
-set.seed(123)
-lon_knn_td_pca <- train(LONGITUDE ~ .-USERID-FLOOR-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
-                        data = wifilocation_grouped_TD_pca, method = "knn", 
-                        preProc = c("center","scale"), tuneLength = 10,
-                        trControl = fitControl)
-lon_knn_td_pca #RMSE=9.47, R=0.96, MAE=7.02
-set.seed(123)
-lon_rf_td_pca <- train(LONGITUDE ~ .-USERID-FLOOR-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
-                       data = wifilocation_grouped_TD_pca, method = "rf", 
-                       ntree=50, tuneLength = 10,
-                       trControl = fitControl)
-lon_rf_td_pca #RMSE=8.85, R=0.97, MAE=6.50
+#set.seed(123)
+#lon_knn_td_pca <- train(LONGITUDE ~ .-USERID-FLOOR-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+#                        data = wifilocation_grouped_TD_pca, method = "knn", 
+#                        preProc = c("center","scale"), tuneLength = 10,
+#                        trControl = fitControl)
+#lon_knn_td_pca #RMSE=9.47, R=0.96, MAE=7.02
+#set.seed(123)
+#lon_rf_td_pca <- train(LONGITUDE ~ .-USERID-FLOOR-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+#                       data = wifilocation_grouped_TD_pca, method = "rf", 
+#                       ntree=50, tuneLength = 10,
+#                       trControl = fitControl)
+#lon_rf_td_pca #RMSE=8.85, R=0.97, MAE=6.50
 #all
-set.seed(123)
-lon_knn_td_all <- train(LONGITUDE ~ .-USERID-FLOOR-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
-                        data = wifilocation_grouped_TD, method = "knn", 
-                        preProc = c("center","scale"), tuneLength = 10,
-                        trControl = fitControl)
-lon_knn_td_all #RMSE=8.98, R=0.97, MAE=6.59
-set.seed(123)
-lon_rf_td_all <- train(LONGITUDE ~ .-USERID-FLOOR-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
-                       data = wifilocation_grouped_TD, method = "rf", 
-                       ntree=50, tuneLength = 10,
-                       trControl = fitControl)
-lon_rf_td_all #RMSE=9.16, R=0.97, MAE=6.81
+#set.seed(123)
+#lon_knn_td_all <- train(LONGITUDE ~ .-USERID-FLOOR-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+#                        data = wifilocation_grouped_TD, method = "knn", 
+#                        preProc = c("center","scale"), tuneLength = 10,
+#                        trControl = fitControl)
+#lon_knn_td_all #RMSE=8.98, R=0.97, MAE=6.59
+#set.seed(123)
+#lon_rf_td_all <- train(LONGITUDE ~ .-USERID-FLOOR-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+#                       data = wifilocation_grouped_TD, method = "rf", 
+#                       ntree=50, tuneLength = 10,
+#                       trControl = fitControl)
+#lon_rf_td_all #RMSE=9.16, R=0.97, MAE=6.81
 #only WAPS located at TD
-wifilocation_grouped_TD_waps <- data.frame(wifilocation_grouped_TD[,WAPS_loc_TD],wifilocation_grouped_TD[,"LONGITUDE"],
-                                           wifilocation_grouped_TD[,"LATITUDE"])
-set.seed(123)
-lon_knn_td_waps <- train(LONGITUDE ~ .-LATITUDE, 
-                         data = wifilocation_grouped_TD_waps, method = "knn", 
-                         preProc = c("center","scale"), tuneLength = 10,
-                         trControl = fitControl)
-lon_knn_td_waps #RMSE=9.48, R=0.96, MAE=6.80
-set.seed(123)
-lon_rf_td_waps<- train(LONGITUDE ~ .-LATITUDE, 
-                       data = wifilocation_grouped_TD_waps, method = "rf", 
-                       ntree=50, tuneLength = 10,
-                       trControl = fitControl)
-lon_rf_td_waps #RMSE=9.18, R=0.97, MAE=6.92
+#wifilocation_grouped_TD_waps <- data.frame(wifilocation_grouped_TD[,WAPS_loc_TD],wifilocation_grouped_TD[,"LONGITUDE"],
+#                                           wifilocation_grouped_TD[,"LATITUDE"])
+#set.seed(123)
+#lon_knn_td_waps <- train(LONGITUDE ~ .-LATITUDE, 
+#                         data = wifilocation_grouped_TD_waps, method = "knn", 
+#                         preProc = c("center","scale"), tuneLength = 10,
+#                         trControl = fitControl)
+#lon_knn_td_waps #RMSE=9.48, R=0.96, MAE=6.80
+#set.seed(123)
+#lon_rf_td_waps<- train(LONGITUDE ~ .-LATITUDE, 
+#                       data = wifilocation_grouped_TD_waps, method = "rf", 
+#                       ntree=50, tuneLength = 10,
+#                       trControl = fitControl)
+#lon_rf_td_waps #RMSE=9.18, R=0.97, MAE=6.92
 
 #Tune using PCA
-set.seed(123)
-lon_gbm_td_pca <- train(LONGITUDE ~ .-USERID-FLOOR-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
-                        data = wifilocation_grouped_TD_pca, method = "gbm", 
-                        tuneLength = 10,
-                        trControl = fitControl)
-lon_gbm_td_pca #RMSE=9.13 R=0.97, MAE=6.78
-set.seed(123)
-lon_svmr_td_pca <- train(LONGITUDE ~ .-USERID-FLOOR-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
-                         data = wifilocation_grouped_TD_pca, method = "svmRadial", 
-                         tuneLength = 10,preProcess = c("center", "scale"),
-                         trControl = fitControl)
-lon_svmr_td_pca #RMSE=9.70, R=0.96, MAE=7.12
+#set.seed(123)
+#lon_gbm_td_pca <- train(LONGITUDE ~ .-USERID-FLOOR-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+#                        data = wifilocation_grouped_TD_pca, method = "gbm", 
+#                        tuneLength = 10,
+#                        trControl = fitControl)
+#lon_gbm_td_pca #RMSE=9.13 R=0.97, MAE=6.78
+#set.seed(123)
+#lon_svmr_td_pca <- train(LONGITUDE ~ .-USERID-FLOOR-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+#                         data = wifilocation_grouped_TD_pca, method = "svmRadial", 
+#                         tuneLength = 10,preProcess = c("center", "scale"),
+#                         trControl = fitControl)
+#lon_svmr_td_pca #RMSE=9.70, R=0.96, MAE=7.12
 #tune svmr
-grid_radial <- expand.grid(sigma = c(0,0.01, 0.02, 0.03, 0.04,0.05, 0.06, 0.07,0.08, 0.09, 0.1),
-                           C = c(1,2,4,8,16,32))
-set.seed(123)
-lon_svmr2_td_pca <- train(LONGITUDE ~ .-USERID-FLOOR-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
-                          data = wifilocation_grouped_TD_pca, method = "svmRadial", 
-                          tuneGrid = grid_radial,preProcess = c("center", "scale"),
-                          trControl = fitControl)
-lon_svmr2_td_pca #RMSE=9.68, R=0.96, MAE=7.09
+#grid_radial <- expand.grid(sigma = c(0,0.01, 0.02, 0.03, 0.04,0.05, 0.06, 0.07,0.08, 0.09, 0.1),
+#                           C = c(1,2,4,8,16,32))
+#set.seed(123)
+#lon_svmr2_td_pca <- train(LONGITUDE ~ .-USERID-FLOOR-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+#                          data = wifilocation_grouped_TD_pca, method = "svmRadial", 
+#                          tuneGrid = grid_radial,preProcess = c("center", "scale"),
+#                          trControl = fitControl)
+#lon_svmr2_td_pca #RMSE=9.68, R=0.96, MAE=7.09
 #tune RF with different number trees
 #model_RF_lon_TD <- list() #create a list of models
 #for (ntree in c(10, 20, 50, 100, 500)) {  #for each number of trees
@@ -1440,115 +1536,115 @@ ggplot(wifilocation_validation_grouped_TD, aes(x=LONGITUDE,y=LATITUDE,color=LONG
 
 #-----Latitude TD-------------
 #PCA
-set.seed(123)
-lat_knn_td_pca <- train(LATITUDE ~ .-USERID-FLOOR-LONGITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
-                        data = wifilocation_grouped_TD_pca, method = "knn", 
-                        preProc = c("center","scale"), tuneLength = 10,
-                        trControl = fitControl)
-lat_knn_td_pca #RMSE=8.22, R=0.95, MAE=6.00 , k=5
-set.seed(123)
-lat_knn2_td_pca <- train(LATITUDE ~ .-USERID-FLOOR-LONGITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
-                        data = wifilocation_grouped_TD_pca, method = "knn", 
-                        preProc = c("center","scale"), tuneGrid = expand.grid(k=c(1:5)),
-                        trControl = fitControl)
-lat_knn2_td_pca #RMSE=8.11, R=0.95, MAE=5.75 , k=5
-set.seed(123)
-lat_rf_td_pca <- train(LATITUDE ~ .-USERID-FLOOR-LONGITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
-                       data = wifilocation_grouped_TD_pca, method = "rf", 
-                       ntree=50, tuneLength = 10,
-                       trControl = fitControl)
-lat_rf_td_pca #RMSE=8.14, R=0.95, MAE=6.02
+#set.seed(123)
+#lat_knn_td_pca <- train(LATITUDE ~ .-USERID-FLOOR-LONGITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+#                        data = wifilocation_grouped_TD_pca, method = "knn", 
+#                        preProc = c("center","scale"), tuneLength = 10,
+#                        trControl = fitControl)
+#lat_knn_td_pca #RMSE=8.22, R=0.95, MAE=6.00 , k=5
+#set.seed(123)
+#lat_knn2_td_pca <- train(LATITUDE ~ .-USERID-FLOOR-LONGITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+#                        data = wifilocation_grouped_TD_pca, method = "knn", 
+#                        preProc = c("center","scale"), tuneGrid = expand.grid(k=c(1:5)),
+#                        trControl = fitControl)
+#lat_knn2_td_pca #RMSE=8.11, R=0.95, MAE=5.75 , k=5
+#set.seed(123)
+#lat_rf_td_pca <- train(LATITUDE ~ .-USERID-FLOOR-LONGITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+#                       data = wifilocation_grouped_TD_pca, method = "rf", 
+#                       ntree=50, tuneLength = 10,
+#                       trControl = fitControl)
+#lat_rf_td_pca #RMSE=8.14, R=0.95, MAE=6.02
 #tune RF with different number trees
-model_RF_lat_TD <- list() #create a list of models
-for (ntree in c(10, 20, 50, 100, 500)) {  #for each number of trees
-  set.seed(123)
-  fit <- train(LATITUDE ~ .-USERID-FLOOR-LONGITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
-               data = wifilocation_grouped_TD_pca, method = "rf", 
-               ntree=ntree, tuneLength = 10,
-               trControl = fitControl)
-  key <- toString(ntree) #transform number of trees to string
-  model_RF_lon_TD[[key]] <- fit #name each model and store it a variable of model_RF
-}
+#model_RF_lat_TD <- list() #create a list of models
+#for (ntree in c(10, 20, 50, 100, 500)) {  #for each number of trees
+#  set.seed(123)
+#  fit <- train(LATITUDE ~ .-USERID-FLOOR-LONGITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+#               data = wifilocation_grouped_TD_pca, method = "rf", 
+#               ntree=ntree, tuneLength = 10,
+#               trControl = fitControl)
+#  key <- toString(ntree) #transform number of trees to string
+#  model_RF_lon_TD[[key]] <- fit #name each model and store it a variable of model_RF
+#}
 #compare results
-model_RF_lon_TD[["10"]] #RMSE:8.66, R:0.94, MAE:6.42
-model_RF_lon_TD[["20"]] #RMSE:8.30, R:0.95, MAE:6.15
-model_RF_lon_TD[["50"]] #RMSE:8.14, R:0.95, MAE:6.02
-model_RF_lon_TD[["100"]] #RMSE:8.07, R:0.95, MAE:5.95
-model_RF_lon_TD[["500"]] #RMSE:8.08, R:0.95, MAE:5.94
+#model_RF_lon_TD[["10"]] #RMSE:8.66, R:0.94, MAE:6.42
+#model_RF_lon_TD[["20"]] #RMSE:8.30, R:0.95, MAE:6.15
+#model_RF_lon_TD[["50"]] #RMSE:8.14, R:0.95, MAE:6.02
+#model_RF_lon_TD[["100"]] #RMSE:8.07, R:0.95, MAE:5.95
+#model_RF_lon_TD[["500"]] #RMSE:8.08, R:0.95, MAE:5.94
 ##100 trees is the best RMSE, 500 the best MAE, use 100 trees, no much difference
-lat_rf2_td_pca <- model_RF_lon_TD[["100"]]
+#lat_rf2_td_pca <- model_RF_lon_TD[["100"]]
 
 #all
-set.seed(123)
-lat_knn_td_all <- train(LATITUDE ~ .-USERID-FLOOR-LONGITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
-                        data = wifilocation_grouped_TD, method = "knn", 
-                        preProc = c("center","scale"), tuneLength = 10,
-                        trControl = fitControl)
-lat_knn_td_all #RMSE=8.48, R=0.95, MAE=6.33 k=5
-set.seed(123)
-lat_knn2_td_all <- train(LATITUDE ~ .-USERID-FLOOR-LONGITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
-                        data = wifilocation_grouped_TD, method = "knn", 
-                        preProc = c("center","scale"), tuneGrid=expand.grid(k=c(1:5)),
-                        trControl = fitControl)
-lat_knn2_td_all #RMSE=8.38, R=0.95, MAE=6.09 k=3
-set.seed(123)
-lat_rf_td_all <- train(LATITUDE ~ .-USERID-FLOOR-LONGITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
-                       data = wifilocation_grouped_TD, method = "rf", 
-                       ntree=50, tuneLength = 10,
-                       trControl = fitControl)
-lat_rf_td_all #RMSE=8.03, R=0.95, MAE=6.08
+#set.seed(123)
+#lat_knn_td_all <- train(LATITUDE ~ .-USERID-FLOOR-LONGITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+#                        data = wifilocation_grouped_TD, method = "knn", 
+#                        preProc = c("center","scale"), tuneLength = 10,
+#                        trControl = fitControl)
+#lat_knn_td_all #RMSE=8.48, R=0.95, MAE=6.33 k=5
+#set.seed(123)
+#lat_knn2_td_all <- train(LATITUDE ~ .-USERID-FLOOR-LONGITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+#                        data = wifilocation_grouped_TD, method = "knn", 
+#                        preProc = c("center","scale"), tuneGrid=expand.grid(k=c(1:5)),
+#                        trControl = fitControl)
+#lat_knn2_td_all #RMSE=8.38, R=0.95, MAE=6.09 k=3
+#set.seed(123)
+#lat_rf_td_all <- train(LATITUDE ~ .-USERID-FLOOR-LONGITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+#                       data = wifilocation_grouped_TD, method = "rf", 
+#                       ntree=50, tuneLength = 10,
+#                       trControl = fitControl)
+#lat_rf_td_all #RMSE=8.03, R=0.95, MAE=6.08
 #only WAPS located at TI
-set.seed(123)
-lat_knn_td_waps <- train(LATITUDE ~ .-LONGITUDE, 
-                         data = wifilocation_grouped_TD_waps, method = "knn", 
-                         preProc = c("center","scale"), tuneLength = 10,
-                         trControl = fitControl)
-lat_knn_td_waps #RMSE=8.22, R=0.95, MAE=6.15 k=5
-set.seed(123)
-lat_knn2_td_waps <- train(LATITUDE ~ .-LONGITUDE, 
-                         data = wifilocation_grouped_TD_waps, method = "knn", 
-                         preProc = c("center","scale"), tuneGrid=expand.grid(k=c(1:5)),
-                         trControl = fitControl)
-lat_knn2_td_waps #RMSE=8.02, R=0.95, MAE=5.80 k=3
-set.seed(123)
-lat_rf_td_waps<- train(LATITUDE ~ .-LONGITUDE, 
-                       data = wifilocation_grouped_TD_waps, method = "rf", 
-                       ntree=50, tuneLength = 10,
-                       trControl = fitControl)
-lat_rf_td_waps #RMSE=8.07, R=0.95, MAE=6.19
+#set.seed(123)
+#lat_knn_td_waps <- train(LATITUDE ~ .-LONGITUDE, 
+#                         data = wifilocation_grouped_TD_waps, method = "knn", 
+#                         preProc = c("center","scale"), tuneLength = 10,
+#                         trControl = fitControl)
+#lat_knn_td_waps #RMSE=8.22, R=0.95, MAE=6.15 k=5
+#set.seed(123)
+#lat_knn2_td_waps <- train(LATITUDE ~ .-LONGITUDE, 
+#                         data = wifilocation_grouped_TD_waps, method = "knn", 
+#                         preProc = c("center","scale"), tuneGrid=expand.grid(k=c(1:5)),
+#                         trControl = fitControl)
+#lat_knn2_td_waps #RMSE=8.02, R=0.95, MAE=5.80 k=3
+#set.seed(123)
+#lat_rf_td_waps<- train(LATITUDE ~ .-LONGITUDE, 
+#                       data = wifilocation_grouped_TD_waps, method = "rf", 
+#                       ntree=50, tuneLength = 10,
+#                       trControl = fitControl)
+#lat_rf_td_waps #RMSE=8.07, R=0.95, MAE=6.19
 
 #Tune using PCA
-set.seed(123)
-lat_gbm_td_pca <- train(LATITUDE ~ .-USERID-FLOOR-LONGITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
-                        data = wifilocation_grouped_TD_pca, method = "gbm", 
-                        tuneLength = 10,
-                        trControl = fitControl)
-lat_gbm_td_pca #RMSE=7.82 R=0.95, MAE=5.90
-set.seed(123)
-lat_gbm2_td_pca <- train(LATITUDE ~ .-USERID-FLOOR-LONGITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
-                        data = wifilocation_grouped_TD_pca, method = "gbm", 
-                        tuneGrid = expand.grid(n.trees=seq(from=50,to=500,by=50),
-                                               interaction.depth = c(1,4,6,7,8,9,10),
-                                               shrinkage=c(0,0.05,0.1,0.2,0.3),
-                                               n.minobsinnode=c(5,10,15,20)),
-                        trControl = fitControl)
-lat_gbm2_td_pca #RMSE=7.65 R=0.96, MAE=5.70
+#set.seed(123)
+#lat_gbm_td_pca <- train(LATITUDE ~ .-USERID-FLOOR-LONGITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+#                        data = wifilocation_grouped_TD_pca, method = "gbm", 
+#                        tuneLength = 10,
+#                        trControl = fitControl)
+#lat_gbm_td_pca #RMSE=7.82 R=0.95, MAE=5.90
+#set.seed(123)
+#lat_gbm2_td_pca <- train(LATITUDE ~ .-USERID-FLOOR-LONGITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+#                        data = wifilocation_grouped_TD_pca, method = "gbm", 
+#                        tuneGrid = expand.grid(n.trees=seq(from=50,to=500,by=50),
+#                                               interaction.depth = c(1,4,6,7,8,9,10),
+#                                               shrinkage=c(0,0.05,0.1,0.2,0.3),
+#                                               n.minobsinnode=c(5,10,15,20)),
+#                        trControl = fitControl)
+#lat_gbm2_td_pca #RMSE=7.65 R=0.96, MAE=5.70
 
-set.seed(123)
-lat_svmr_td_pca <- train(LATITUDE ~ .-USERID-FLOOR-LONGITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
-                         data = wifilocation_grouped_TD_pca, method = "svmRadial", 
-                         tuneLength = 10,preProcess = c("center", "scale"),
-                         trControl = fitControl)
-lat_svmr_td_pca #RMSE=8.17, R=0.95, MAE=6.03
+#set.seed(123)
+#lat_svmr_td_pca <- train(LATITUDE ~ .-USERID-FLOOR-LONGITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+#                         data = wifilocation_grouped_TD_pca, method = "svmRadial", 
+#                         tuneLength = 10,preProcess = c("center", "scale"),
+#                         trControl = fitControl)
+#lat_svmr_td_pca #RMSE=8.17, R=0.95, MAE=6.03
 #tune svmr
-grid_radial <- expand.grid(sigma = c(0,0.01, 0.02, 0.03, 0.04,0.05, 0.06, 0.07,0.08, 0.09, 0.1),
-                           C = c(1,2,3,4,8,16,32))
-set.seed(123)
-lat_svmr2_td_pca <- train(LATITUDE ~ .-USERID-FLOOR-LONGITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
-                          data = wifilocation_grouped_TD_pca, method = "svmRadial", 
-                          tuneGrid = grid_radial,preProcess = c("center", "scale"),
-                          trControl = fitControl)
-lat_svmr2_td_pca #RMSE=8.10, R=0.95, MAE=5.99
+#grid_radial <- expand.grid(sigma = c(0,0.01, 0.02, 0.03, 0.04,0.05, 0.06, 0.07,0.08, 0.09, 0.1),
+#                           C = c(1,2,3,4,8,16,32))
+#set.seed(123)
+#lat_svmr2_td_pca <- train(LATITUDE ~ .-USERID-FLOOR-LONGITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+#                          data = wifilocation_grouped_TD_pca, method = "svmRadial", 
+#                          tuneGrid = grid_radial,preProcess = c("center", "scale"),
+#                          trControl = fitControl)
+#lat_svmr2_td_pca #RMSE=8.10, R=0.95, MAE=5.99
 
 #save models to test
 save(lat_knn2_td_pca, file = "lat_knn2_td_pca.rda")
@@ -1614,21 +1710,6 @@ abline(a=0,b=1,col="red")
 plot(density(wifilocation_validation_grouped_TD_pca$LATITUDE-predictions_lat_knn2_td_pca))
 lines(density(wifilocation_validation_grouped_TD_pca$LATITUDE-predictions_lat_gbm2_td_pca),col="red")
 
-##See predicted longitude and latitude for TD
-#add to validation
-wifilocation_validation_grouped_TD$LONGITUDE_pre <- predictions_lon_rf_td_pca
-wifilocation_validation_grouped_TD$LATITUDE_pre_knn <- predictions_lat_knn2_td_pca
-wifilocation_validation_grouped_TD$LATITUDE_pre_gbm <- predictions_lat_gbm2_td_pca
-ggplot(wifilocation_validation_grouped_TD, aes(x=LONGITUDE,y=LATITUDE)) +
-  ggtitle("Predicted")+
-  labs(x='Longitude', y='Latitude') +
-  geom_point(colour="grey")+
-  geom_point(aes(y=LATITUDE_pre_knn,x=LONGITUDE_pre,colour="red"))+
-  geom_point(aes(y=LATITUDE_pre_gbm,x=LONGITUDE_pre,colour="blue"))+
-  facet_wrap("FLOOR")+
-  theme_dark()
-#no much difference between latitude knn and gbm
-
 ##Add predicted to valdation set and visualize, use gbm2
 wifilocation_validation_grouped_TD$LATITUDE_pred <- predictions_lat_gbm2_td_pca
 #location
@@ -1678,6 +1759,13 @@ lon_knn3_tc_pca <- train(LONGITUDE ~ .-USERID-LATITUDE-SPACEID-RELATIVEPOSITION-
                          preProc = c("center","scale"), tuneGrid = expand.grid(k=c(1:5)),
                          trControl = fitControl)
 lon_knn3_tc_pca #RMSE=7.62, R=0.93, MAE=5.04 k=3
+#For 0-3 floor
+set.seed(123)
+lon_knn4_tc_pca <- train(LONGITUDE ~ .-USERID-FLOOR-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+                         data = wifilocation_grouped_TC_pca[wifilocation_grouped_TC_pca$FLOOR!="Fourth",], method = "knn", 
+                         preProc = c("center","scale"), tuneGrid = expand.grid(k=c(1:5)),
+                         trControl = fitControl)
+lon_knn4_tc_pca #RMSE=7.68, R=0.93, MAE=4.79 k=2
 
 model_RF_lon_TC <- list() #create a list of models
 for (ntree in c(10, 20, 50, 100, 500)) {  #for each number of trees
@@ -1697,6 +1785,24 @@ model_RF_lon_TC[["100"]] #RMSE:10.68, R:0.88, MAE:7.20
 model_RF_lon_TC[["500"]] #RMSE:10.64, R:0.88, MAE:7.13
 ##500 trees is the best
 lon_rf_tc_pca <- model_RF_lon_TC[["500"]]
+
+model_RF2_lon_TC <- list() #create a list of models
+for (ntree in c(10, 20, 50, 100, 500)) {  #for each number of trees
+  set.seed(123)
+  fit <- train(LONGITUDE ~ .-USERID-FLOOR-LATITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+               data = wifilocation_grouped_TC_pca[wifilocation_grouped_TC_pca$FLOOR=="Fourth",], method = "rf", 
+               ntree=ntree, tuneLength = 10,
+               trControl = fitControl)
+  key <- toString(ntree) #transform number of trees to string
+  model_RF2_lon_TC[[key]] <- fit #name each model and store it a variable of model_RF
+}
+model_RF2_lon_TC[["10"]] #RMSE:10.54, R:0.91, MAE:8.67
+model_RF2_lon_TC[["20"]] #RMSE:10.48, R:0.91, MAE:8.64
+model_RF2_lon_TC[["50"]] #RMSE:10.47, R:0.91, MAE:8.51
+model_RF2_lon_TC[["100"]] #RMSE:10.49, R:0.91, MAE:8.56
+model_RF2_lon_TC[["500"]] #RMSE:10.51, R:0.91, MAE:8.60
+##50 trees is the best
+lon_rf2_tc_pca <- model_RF2_lon_TC[["50"]]
 
 #all
 set.seed(123)
@@ -1780,8 +1886,10 @@ lon_svmr2_tc_pca #RMSE=9.53, R=0.90, MAE=6.76
 #save models to test
 save(lon_knn2_tc_pca, file = "lon_knn2_tc_pca.rda")
 save(lon_knn3_tc_pca, file = "lon_knn3_tc_pca.rda")
+save(lon_knn4_tc_pca, file = "lon_knn4_tc_pca.rda")
 save(lon_svmr2_tc_pca, file = "lon_svmr2_tc_pca.rda")
 save(lon_rf_tc_pca, file = "lon_rf_tc_pca.rda")
+save(lon_rf2_tc_pca, file = "lon_rf2_tc_pca.rda")
 save(lon_gbm_tc_pca, file = "lon_gbm_tc_pca.rda")
 
 #longitude of TC knn
@@ -1798,34 +1906,50 @@ ggplot(wifilocation_validation_grouped_TC, aes(x=LONGITUDE,y=LATITUDE)) +
 #OK, several in the middle, lots errors at the 4th floor
 plot(density(wifilocation_validation_grouped_TC_pca$LONGITUDE-predictions_lon_knn2_tc_pca))
 #For 0-3 floor
-predictions_lon_knn2_tc_pca2 <-predict(lon_knn2_tc_pca, wifilocation_validation_grouped_TC_pca[wifilocation_validation_grouped_TC_pca$FLOOR != "Fourth",])
-postResample(predictions_lon_knn2_tc_pca2, wifilocation_validation_grouped_TC_pca[wifilocation_validation_grouped_TC_pca$FLOOR != "Fourth","LONGITUDE"]) 
-#RMSE:12.04, R:0.85, MAE=7.91
-ggplot(wifilocation_validation_grouped_TC[wifilocation_validation_grouped_TC_pca$FLOOR != "Fourth",], aes(x=LONGITUDE,y=LATITUDE)) +
+predictions_lon_knn2_tc_pca2 <-predict(lon_knn2_tc_pca, wifilocation_validation_grouped_TC_pca[wifilocation_validation_grouped_TC_pca$FLOOR_pred != "Fourth",])
+postResample(predictions_lon_knn2_tc_pca2, wifilocation_validation_grouped_TC_pca[wifilocation_validation_grouped_TC_pca$FLOOR_pred != "Fourth","LONGITUDE"]) 
+#RMSE:13.10, R:0.82, MAE=8.44
+ggplot(wifilocation_validation_grouped_TC[wifilocation_validation_grouped_TC_pca$FLOOR_pred != "Fourth",], aes(x=LONGITUDE,y=LATITUDE)) +
   ggtitle("Error knn")+
   labs(x='Longitude', y='Latitude') +
   geom_point(colour="grey")+
-  geom_point(aes(x=predictions_lon_knn2_tc_pca2,y=LATITUDE,colour="red"))+
-  facet_wrap("FLOOR")
+  geom_point(aes(x=predictions_lon_knn2_tc_pca2,y=LATITUDE),colour="red")+
+  facet_wrap("FLOOR_pred")
 #OK, several in the middle, lots errors at the 4th floor
-plot(density(wifilocation_validation_grouped_TC_pca[wifilocation_validation_grouped_TC_pca$FLOOR != "Fourth","LONGITUDE"]
+plot(density(wifilocation_validation_grouped_TC_pca[wifilocation_validation_grouped_TC_pca$FLOOR_pred != "Fourth","LONGITUDE"]
              -predictions_lon_knn2_tc_pca2))
 
 #longitude of TC knn using the predicted floor
 load("lon_knn3_tc_pca.rda")
-wifilocation_validation_grouped_TC_pca$FLOOR <- predictions_floor_rf_tc_max
+wifilocation_validation_grouped_TC_pca$FLOOR_real <- wifilocation_validation_grouped_TC_pca$FLOOR
+wifilocation_validation_grouped_TC_pca$FLOOR <- wifilocation_validation_grouped_TC_pca$FLOOR_pred
 predictions_lon_knn3_tc_pca <-predict(lon_knn3_tc_pca, wifilocation_validation_grouped_TC_pca)
 postResample(predictions_lon_knn3_tc_pca, wifilocation_validation_grouped_TC_pca$LONGITUDE) 
-#RMSE:12.93, R:0.84, MAE=8.52
+#RMSE:11.96, R:0.86, MAE=7.95
 ggplot(wifilocation_validation_grouped_TC, aes(x=LONGITUDE,y=LATITUDE)) +
   ggtitle("Error knn")+
   labs(x='Longitude', y='Latitude') +
   geom_point(colour="grey")+
   geom_point(aes(x=predictions_lon_knn3_tc_pca,y=LATITUDE,colour="red"))+
   facet_wrap("FLOOR")
-plot(density(wifilocation_validation_grouped_TC_pca$LONGITUDE-predictions_lon_knn2_tc_pca))
-lines(density(wifilocation_validation_grouped_TC_pca$LONGITUDE-predictions_lon_knn3_tc_pca),col="red")
-#little better distribution
+plot(density(wifilocation_validation_grouped_TC_pca$LONGITUDE-predictions_lon_knn3_tc_pca))
+#good peak
+
+#longitude of TC knn using the predicted floor
+load("lon_knn4_tc_pca.rda")
+wifilocation_validation_grouped_TC_pca$FLOOR_pred <- predictions_floor_rf_tc_max
+predictions_lon_knn4_tc_pca <-predict(lon_knn4_tc_pca, wifilocation_validation_grouped_TC_pca[wifilocation_validation_grouped_TC_pca$FLOOR_pred!="Fourth",])
+postResample(predictions_lon_knn4_tc_pca, wifilocation_validation_grouped_TC_pca[wifilocation_validation_grouped_TC_pca$FLOOR_pred!="Fourth","LONGITUDE"]) 
+#RMSE= 13.92, Rsquared=0.80, MAE=8.16
+ggplot(wifilocation_validation_grouped_TC[wifilocation_validation_grouped_TC_pca$FLOOR_pred != "Fourth",], aes(x=LONGITUDE,y=LATITUDE)) +
+  ggtitle("Error knn")+
+  labs(x='Longitude', y='Latitude') +
+  geom_point(colour="grey")+
+  geom_point(aes(x=predictions_lon_knn4_tc_pca,y=LATITUDE,colour="red"))+
+  facet_wrap("FLOOR_pred")
+#OK, several in the middle, lots errors at the 4th floor
+plot(density(wifilocation_validation_grouped_TC_pca[wifilocation_validation_grouped_TC_pca$FLOOR_pred != "Fourth","LONGITUDE"]
+             -predictions_lon_knn4_tc_pca))
 
 #longitude of TC svmRadial
 load("lon_svmr2_tc_pca.rda")
@@ -1859,18 +1983,32 @@ lines(density(wifilocation_validation_grouped_TC_pca$LONGITUDE-predictions_lon_k
 #knn is better
 #longitude of TC rf only 4th floor
 load("lon_rf_tc_pca.rda")
-predictions_lon_rf_tc_pca2 <-predict(lon_rf_tc_pca, wifilocation_validation_grouped_TC_pca[wifilocation_validation_grouped_TC_pca$FLOOR == "Fourth",])
-postResample(predictions_lon_rf_tc_pca2, wifilocation_validation_grouped_TC_pca[wifilocation_validation_grouped_TC_pca$FLOOR == "Fourth","LONGITUDE"]) 
-#RMSE: 14.78, R:0.82, MAE=11.35
-ggplot(wifilocation_validation_grouped_TC[wifilocation_validation_grouped_TC$FLOOR == "Fourth",], aes(x=LONGITUDE,y=LATITUDE)) +
+predictions_lon_rf_tc_pca2 <-predict(lon_rf_tc_pca, wifilocation_validation_grouped_TC_pca[wifilocation_validation_grouped_TC_pca$FLOOR_pred == "Fourth",])
+postResample(predictions_lon_rf_tc_pca2, wifilocation_validation_grouped_TC_pca[wifilocation_validation_grouped_TC_pca$FLOOR_pred == "Fourth","LONGITUDE"]) 
+#RMSE: 14.21, R:0.85, MAE=10.93
+ggplot(wifilocation_validation_grouped_TC[wifilocation_validation_grouped_TC$FLOOR_pred == "Fourth",], aes(x=LONGITUDE,y=LATITUDE)) +
   ggtitle("Error rf")+
   labs(x='Longitude', y='Latitude') +
   geom_point(colour="grey")+
   geom_point(aes(x=predictions_lon_rf_tc_pca2,y=LATITUDE,colour="red"))+
   facet_wrap("FLOOR")
 #still bad, not much in the middle
-plot(density(wifilocation_validation_grouped_TC_pca[wifilocation_validation_grouped_TC_pca$FLOOR == "Fourth","LONGITUDE"]-predictions_lon_rf_tc_pca2))
+plot(density(wifilocation_validation_grouped_TC_pca[wifilocation_validation_grouped_TC_pca$FLOOR_pred == "Fourth","LONGITUDE"]-predictions_lon_rf_tc_pca2))
 #wide peak
+load("lon_rf2_tc_pca.rda")
+predictions_lon_rf2_tc_pca <-predict(lon_rf2_tc_pca, wifilocation_validation_grouped_TC_pca[wifilocation_validation_grouped_TC_pca$FLOOR_pred=="Fourth",])
+postResample(predictions_lon_rf2_tc_pca, wifilocation_validation_grouped_TC_pca[wifilocation_validation_grouped_TC_pca$FLOOR_pred=="Fourth","LONGITUDE"]) 
+#RMSE= 23.64, Rsquared=0.79, MAE=15.41
+ggplot(wifilocation_validation_grouped_TC[wifilocation_validation_grouped_TC_pca$FLOOR_pred == "Fourth",], aes(x=LONGITUDE,y=LATITUDE)) +
+  ggtitle("Error knn")+
+  labs(x='Longitude', y='Latitude') +
+  geom_point(colour="grey")+
+  geom_point(aes(x=predictions_lon_rf2_tc_pca,y=LATITUDE,colour="red"))+
+  facet_wrap("FLOOR_pred")
+#OK, several in the middle, lots errors at the 4th floor
+plot(density(wifilocation_validation_grouped_TC_pca[wifilocation_validation_grouped_TC_pca$FLOOR_pred == "Fourth","LONGITUDE"]
+             -predictions_lon_rf2_tc_pca))
+#two peaks, all from right side are in the middle.
 
 #longitude of TD gbm
 load("lon_gbm_tc_pca.rda")
@@ -1888,11 +2026,12 @@ plot(density(wifilocation_validation_grouped_TC_pca$LONGITUDE-predictions_lon_gb
 #wide
 
 ##Add predicted to valdation set and visualize
-wifilocation_validation_grouped_TC[wifilocation_validation_grouped_TC$FLOOR != "Fourth","LONGITUDE_pred"] <- predictions_lon_knn2_tc_pca2
-wifilocation_validation_grouped_TC[wifilocation_validation_grouped_TC$FLOOR == "Fourth","LONGITUDE_pred"] <- predictions_lon_rf_tc_pca2
+wifilocation_validation_grouped_TC[wifilocation_validation_grouped_TC$FLOOR_pred != "Fourth","LONGITUDE_pred"] <- predictions_lon_knn2_tc_pca2
+wifilocation_validation_grouped_TC[wifilocation_validation_grouped_TC$FLOOR_pred == "Fourth","LONGITUDE_pred"] <- predictions_lon_rf_tc_pca2
+wifilocation_validation_grouped_TC$LONGITUDE_pred2 <- predictions_lon_knn3_tc_pca
 #location
 wifilocation_validation_grouped_TC$LONGITUDE_error <- (wifilocation_validation_grouped_TC$LONGITUDE_pred - wifilocation_validation_grouped_TC$LONGITUDE)
-summary(abs(wifilocation_validation_grouped_TC$LONGITUDE_error)) #MAE= 8.42
+summary(abs(wifilocation_validation_grouped_TC$LONGITUDE_error)) #MAE= 8.74
 ggplot(wifilocation_validation_grouped_TC, aes(x=LONGITUDE,y=LATITUDE,color=LONGITUDE_error)) +
   ggtitle("Errors in Longitude")+
   labs(x='Longitude', y='Latitude') +
@@ -1915,66 +2054,90 @@ ggplot(wifilocation_validation_grouped_TC[order(wifilocation_validation_grouped_
   theme_dark()+
   facet_wrap("FLOOR")
 
+wifilocation_validation_grouped_TC$LONGITUDE_error2 <- (wifilocation_validation_grouped_TC$LONGITUDE_pred2 - wifilocation_validation_grouped_TC$LONGITUDE)
+summary(abs(wifilocation_validation_grouped_TC$LONGITUDE_error2))
+ggplot(wifilocation_validation_grouped_TC, aes(x=LONGITUDE,y=LATITUDE,color=LONGITUDE_error2)) +
+  ggtitle("Errors in Longitude")+
+  labs(x='Longitude', y='Latitude') +
+  geom_point() +
+  scale_color_gradient2(high="red", low="blue",mid="white")+
+  theme_dark()+
+  facet_wrap("FLOOR")
+ggplot(wifilocation_validation_grouped_TC, aes(x=LONGITUDE,y=LATITUDE,color=LONGITUDE_error2)) +
+  ggtitle("Errors in Longitude")+
+  labs(x='Longitude', y='Latitude') +
+  geom_point() +
+  scale_color_gradient2(high="red", low="blue",mid="white")+
+  theme_dark()+
+  facet_wrap("FLOOR")
+ggplot(wifilocation_validation_grouped_TC[order(wifilocation_validation_grouped_TC$LONGITUDE_error2),], aes(x=LONGITUDE,y=LATITUDE,color=LONGITUDE_error2)) +
+  ggtitle("Errors in Longitude")+
+  labs(x='Longitude', y='Latitude') +
+  geom_segment(aes(xend=LONGITUDE_pred2,yend=LATITUDE),arrow=arrow(length = unit(0.02,"npc"),type = "closed")) +
+  scale_color_gradient2(high="red", low="blue",mid="white")+
+  theme_dark()+
+  facet_wrap("FLOOR")
+
 #-----Latitude TC-------------
 #PCA
-set.seed(123)
-lat_knn_tc_pca <- train(LATITUDE ~ .-USERID-FLOOR-LONGITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
-                        data = wifilocation_grouped_TC_pca, method = "knn", 
-                        preProc = c("center","scale"), tuneLength = 10,
-                        trControl = fitControl)
-lat_knn_tc_pca #RMSE=87.23, R=0.93, MAE=4.74 k=5
-set.seed(123)
-lat_knn2_tc_pca <- train(LATITUDE ~ .-USERID-FLOOR-LONGITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
-                         data = wifilocation_grouped_TC_pca, method = "knn", 
-                         preProc = c("center","scale"), tuneGrid = expand.grid(k=c(1:5)),
-                         trControl = fitControl)
-lat_knn2_tc_pca #RMSE=6.83, R=0.94, MAE=4.34 k=2
-set.seed(123) #use floor
-lat_knn3_tc_pca <- train(LATITUDE ~ .-USERID-LONGITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
-                         data = wifilocation_grouped_TC_pca, method = "knn", 
-                         preProc = c("center","scale"), tuneGrid = expand.grid(k=c(1:5)),
-                         trControl = fitControl)
-lat_knn3_tc_pca #RMSE=6.05, R=0.95, MAE=4.17 k=2
+#set.seed(123)
+#lat_knn_tc_pca <- train(LATITUDE ~ .-USERID-FLOOR-LONGITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+#                        data = wifilocation_grouped_TC_pca, method = "knn", 
+#                        preProc = c("center","scale"), tuneLength = 10,
+#                        trControl = fitControl)
+#lat_knn_tc_pca #RMSE=87.23, R=0.93, MAE=4.74 k=5
+#set.seed(123)
+#lat_knn2_tc_pca <- train(LATITUDE ~ .-USERID-FLOOR-LONGITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+#                         data = wifilocation_grouped_TC_pca, method = "knn", 
+#                         preProc = c("center","scale"), tuneGrid = expand.grid(k=c(1:5)),
+#                         trControl = fitControl)
+#lat_knn2_tc_pca #RMSE=6.83, R=0.94, MAE=4.34 k=2
+#set.seed(123) #use floor
+#lat_knn3_tc_pca <- train(LATITUDE ~ .-USERID-LONGITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+#                         data = wifilocation_grouped_TC_pca, method = "knn", 
+#                         preProc = c("center","scale"), tuneGrid = expand.grid(k=c(1:5)),
+#                         trControl = fitControl)
+#lat_knn3_tc_pca #RMSE=6.05, R=0.95, MAE=4.17 k=2
 
-model_RF_lat_TC <- list() #create a list of models
-for (ntree in c(10, 20, 50, 100, 500)) {  #for each number of trees
-  set.seed(123)
-  fit <- train(LATITUDE ~ .-USERID-FLOOR-LONGITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
-               data = wifilocation_grouped_TC_pca, method = "rf", 
-               ntree=ntree, tuneLength = 10,
-               trControl = fitControl)
-  key <- toString(ntree) #transform number of trees to string
-  model_RF_lat_TC[[key]] <- fit #name each model and store it a variable of model_RF
-}
+#model_RF_lat_TC <- list() #create a list of models
+#for (ntree in c(10, 20, 50, 100, 500)) {  #for each number of trees
+#  set.seed(123)
+#  fit <- train(LATITUDE ~ .-USERID-FLOOR-LONGITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+#               data = wifilocation_grouped_TC_pca, method = "rf", 
+#               ntree=ntree, tuneLength = 10,
+#               trControl = fitControl)
+#  key <- toString(ntree) #transform number of trees to string
+#  model_RF_lat_TC[[key]] <- fit #name each model and store it a variable of model_RF
+#}
 #compare results
-model_RF_lat_TC[["10"]] #RMSE:8.48, R:0.90, MAE:5.69
-model_RF_lat_TC[["20"]] #RMSE:8.17, R:0.91, MAE:5.57
-model_RF_lat_TC[["50"]] #RMSE:7.95, R:0.92, MAE:5.35
-model_RF_lat_TC[["100"]] #RMSE:7.89, R:0.92, MAE:5.31
-model_RF_lat_TC[["500"]] #RMSE:7.84, R:0.92, MAE:5.27
+#model_RF_lat_TC[["10"]] #RMSE:8.48, R:0.90, MAE:5.69
+#model_RF_lat_TC[["20"]] #RMSE:8.17, R:0.91, MAE:5.57
+#model_RF_lat_TC[["50"]] #RMSE:7.95, R:0.92, MAE:5.35
+#model_RF_lat_TC[["100"]] #RMSE:7.89, R:0.92, MAE:5.31
+#model_RF_lat_TC[["500"]] #RMSE:7.84, R:0.92, MAE:5.27
 ##500 trees is the best
-lat_rf_tc_pca <- model_RF_lat_TC[["500"]]
+#lat_rf_tc_pca <- model_RF_lat_TC[["500"]]
 
-set.seed(123)
-lat_rf2_tc_all <- train(LATITUDE ~ .-USERID-LONGITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
-                       data = wifilocation_grouped_TC_pca, method = "rf", 
-                       ntree=500, tuneLength = 10,
-                       trControl = fitControl)
-lat_rf2_tc_pca <- lat_rf2_tc_all
-lat_rf2_tc_pca #RMSE=7.86 , R=0.92 , MAE=5.32, better without floor 
+#set.seed(123)
+#lat_rf2_tc_all <- train(LATITUDE ~ .-USERID-LONGITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+#                       data = wifilocation_grouped_TC_pca, method = "rf", 
+#                       ntree=500, tuneLength = 10,
+#                       trControl = fitControl)
+#lat_rf2_tc_pca <- lat_rf2_tc_all
+#lat_rf2_tc_pca #RMSE=7.86 , R=0.92 , MAE=5.32, better without floor 
 
-set.seed(123)
-lat_gbm_tc_pca <- train(LATITUDE ~ .-USERID-FLOOR-LONGITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
-                        data = wifilocation_grouped_TC_pca, method = "gbm", 
-                        tuneLength = 10,
-                        trControl = fitControl)
-lat_gbm_tc_pca #RMSE=8.26 R=0.91, MAE=5.69
-set.seed(123)
-lat_gbm2_tc_pca <- train(LATITUDE ~ .-USERID-LONGITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
-                        data = wifilocation_grouped_TC_pca, method = "gbm", 
-                        tuneLength = 10,
-                        trControl = fitControl)
-lat_gbm2_tc_pca #RMSE=8.17 R=0.91, MAE=5.66
+#set.seed(123)
+#lat_gbm_tc_pca <- train(LATITUDE ~ .-USERID-FLOOR-LONGITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+#                        data = wifilocation_grouped_TC_pca, method = "gbm", 
+#                        tuneLength = 10,
+#                        trControl = fitControl)
+#lat_gbm_tc_pca #RMSE=8.26 R=0.91, MAE=5.69
+#set.seed(123)
+#lat_gbm2_tc_pca <- train(LATITUDE ~ .-USERID-LONGITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
+#                        data = wifilocation_grouped_TC_pca, method = "gbm", 
+#                        tuneLength = 10,
+ #                       trControl = fitControl)
+#lat_gbm2_tc_pca #RMSE=8.17 R=0.91, MAE=5.66
 #set.seed(123)
 #lat_svmr_tc_pca <- train(LATITUDE ~ .-USERID-FLOOR-LONGITUDE-SPACEID-RELATIVEPOSITION-PHONEID-max_val-max_wap-BUILDINGID, 
 #                         data = wifilocation_grouped_TC_pca, method = "svmRadial", 
@@ -2106,14 +2269,14 @@ ggplot(wifilocation_validation_grouped_TC[order(wifilocation_validation_grouped_
   facet_wrap("FLOOR")
 
 #See latitude and longitude errors together
-wifilocation_validation_grouped_TC$LL_error <- sqrt(((abs(wifilocation_validation_grouped_TC$LONGITUDE_error))^ 2)+((abs(wifilocation_validation_grouped_TC$LATITUDE_error))^ 2))
+wifilocation_validation_grouped_TC$LL_error <- sqrt(((abs(wifilocation_validation_grouped_TC$LONGITUDE_error2))^ 2)+((abs(wifilocation_validation_grouped_TC$LATITUDE_error))^ 2))
 summary(wifilocation_validation_grouped_TC$LL_error)
-#Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-#0.4729  5.1670  9.6877 12.5419 16.2677 56.2615 
+#  Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+#0.7394  5.0982  9.5543 12.1996 15.8937 61.6881 
 ggplot(wifilocation_validation_grouped_TC[order(wifilocation_validation_grouped_TC$LL_error),], aes(x=LONGITUDE,y=LATITUDE,color=LL_error)) +
   ggtitle("Errors in Longitude")+
   labs(x='Longitude', y='Latitude') +
-  geom_segment(aes(xend=LONGITUDE_pred,yend=LATITUDE_pred),arrow=arrow(length = unit(0.02,"npc"),type = "closed")) +
+  geom_segment(aes(xend=LONGITUDE_pred2,yend=LATITUDE_pred),arrow=arrow(length = unit(0.02,"npc"),type = "closed")) +
   scale_color_gradient2(high="red", low="blue",mid="white")+
   theme_dark()+
   facet_wrap("FLOOR")
@@ -2191,24 +2354,47 @@ ggplot(wifilocation_validation_grouped_TDTC_pca, aes(x=LONGITUDE,y=LATITUDE)) +
 #---------------------------------Error location ---------------------------------------------
 #Floor TI
 ggplot(wifilocation_validation_grouped_TI, aes(x=LONGITUDE,y=LATITUDE,color=FLOOR_error)) +
-  ggtitle("Errors in FLOOR")+
+  ggtitle("Errors in Floor for Building TI")+
   labs(x='Longitude', y='Latitude') +
   geom_point() +
-  facet_wrap("FLOOR")
+  facet_grid(.~FLOOR)+
+  theme_dark()
+
 TI_floor_error <- wifilocation_validation_grouped_TI %>%
   filter (FLOOR_error!=0) %>%
   select(FLOOR_error,max_val,max_wap,PHONEID)
 #Most PhoneID = 20 (10/33) and phoneid= 0 (Celkon)
 summary(wifilocation_grouped_TI$PHONEID) #Only lectures taken with 13 and 14., also no lectures with these phones in the training
 
+#low signal zones TI
+wifilocation_validation_low3_ti <- wifilocation_low3[wifilocation_low3$BUILDINGID=="TI",]
+wifilocation_validation_low4_ti <- wifilocation_low4[wifilocation_low4$BUILDINGID=="TI",]
+wifilocation_validation_grouped_low_ti <- wifilocation_grouped_low[wifilocation_grouped_low$BUILDINGID=="TI",]
+wifilocation_low3_ti <- wifilocation_low3[wifilocation_low3$BUILDINGID=="TI",]
+wifilocation_low4_ti <- wifilocation_low4[wifilocation_low4$BUILDINGID=="TI",]
+wifilocation_grouped_low_ti <- wifilocation_grouped_low[wifilocation_grouped_low$BUILDINGID=="TI",]
+low_ti <- ggplot(wifilocation_grouped_TI, aes(x=LONGITUDE,y=LATITUDE)) +
+  ggtitle("Low sigal fingerprints")+
+  labs(x='Longitude', y='Latitude') +
+  geom_point(colour="grey")+
+  geom_point(data=wifilocation_validation_low3_ti,aes(x=LONGITUDE,y=LATITUDE,colour=">3"))+
+  geom_point(data=wifilocation_low3_ti,aes(x=LONGITUDE,y=LATITUDE,colour=">3"))+
+  geom_point(data=wifilocation_validation_low4_ti,aes(x=LONGITUDE,y=LATITUDE,colour=">4"))+
+  geom_point(data=wifilocation_low4_ti,aes(x=LONGITUDE,y=LATITUDE,colour=">4"))+
+#  geom_point(data=wifilocation_validation_grouped_low_ti,aes(x=LONGITUDE,y=LATITUDE,colour="none"))+
+#  geom_point(data=wifilocation_grouped_low_ti,aes(x=LONGITUDE,y=LATITUDE,colour="none"))+
+  scale_colour_manual(name="WAPs with RSSI > -80",values=c(">3"="yellow", ">4"="orange"))+
+  facet_grid(.~FLOOR)+
+  theme_dark()
+
 #longitude TI
 ggplot(wifilocation_validation_grouped_TI, aes(x=LONGITUDE,y=LATITUDE,color=LONGITUDE_error)) +
   ggtitle("Errors in Longitude")+
   labs(x='Longitude', y='Latitude') +
   geom_point() +
-  scale_color_gradient(high="red", low="blue")+
-  theme_dark()+
-  facet_wrap("FLOOR")
+  scale_color_gradient2(high="red",mid="white", low="blue")+
+  theme_gray()+
+  facet_grid(.~FLOOR)
 #latitude TI
 ggplot(wifilocation_validation_grouped_TI, aes(x=LONGITUDE,y=LATITUDE,color=LATITUDE_error)) +
   ggtitle("Errors in Latitude")+
@@ -2216,23 +2402,93 @@ ggplot(wifilocation_validation_grouped_TI, aes(x=LONGITUDE,y=LATITUDE,color=LATI
   geom_point() +
   scale_color_gradient2(high="red",mid="white" ,low="blue")+
   theme_dark()+
-  facet_wrap("FLOOR")
+  facet_grid(.~FLOOR)
 #longitude + latitude TI
-ggplot(wifilocation_validation_grouped_TI[order(wifilocation_validation_grouped_TI$LL_error),], aes(x=LONGITUDE,y=LATITUDE,color=LL_error)) +
-  ggtitle("Errors in Longitude")+
+ggplot(wifilocation_validation_grouped_TI[order(wifilocation_validation_grouped_TI$LL_error),], aes(x=LONGITUDE,y=LATITUDE)) +
+  ggtitle("Error in Longitude and Latitude for Building TI")+
+  labs(x='Longitude', y='Latitude') +
+#  geom_point(data=wifilocation_validation_grouped_TI[wifilocation_validation_grouped_TI$PHONEID==20,],aes(x=LONGITUDE,y=LATITUDE),colour="black",size=4)+
+#  geom_point(data=wifilocation_validation_low4_ti,aes(x=LONGITUDE,y=LATITUDE),colour="blue",size=4)+
+#  geom_point(aes(shape=FLOOR_error,color=LL_error),size=2)+
+  geom_segment(aes(xend=LONGITUDE_pred,yend=LATITUDE_pred,color=LL_error),arrow=arrow(length = unit(0.02,"npc"),type = "closed")) +
+  scale_color_gradient2(high="red", low="blue",mid="white")+
+  theme_dark()+
+  facet_grid(.~FLOOR)
+
+ggplot(wifilocation_validation_grouped_TI[order(wifilocation_validation_grouped_TI$LL_error),], aes(x=LONGITUDE,y=LATITUDE)) +
+  ggtitle("Error in Predictions for Building TI")+
+  labs(x='Longitude', y='Latitude') +
+#  geom_point(data=wifilocation_validation_grouped_TI[wifilocation_validation_grouped_TI$PHONEID==0,],aes(x=LONGITUDE,y=LATITUDE),colour="black",size=4)+
+  geom_point(data=wifilocation_validation_grouped_TI[wifilocation_validation_grouped_TI$PHONEID==20,],aes(x=LONGITUDE,y=LATITUDE),colour="blue",size=4)+
+  geom_point(data=wifilocation_validation_low4_ti,aes(x=LONGITUDE,y=LATITUDE),colour="blue",size=4)+
+  geom_point(aes(shape=FLOOR_error,color=LL_error),size=2)+
+  geom_segment(aes(xend=LONGITUDE_pred,yend=LATITUDE_pred,color=LL_error),arrow=arrow(length = unit(0.02,"npc"),type = "closed")) +
+  scale_color_gradient2(high="red", low="blue",mid="white")+
+  theme_dark()+
+  facet_grid(.~FLOOR)
+
+
+#Floor TD
+ggplot(wifilocation_validation_grouped_TD, aes(x=LONGITUDE,y=LATITUDE,color=FLOOR_error)) +
+  ggtitle("Errors in Floor for TD Building")+
+  labs(x='Longitude', y='Latitude') +
+  geom_point() +
+  facet_grid(.~FLOOR)+
+  theme_dark()
+#Ground floor most errors +1 and the Second floor most -1, probably WAPS high signal at 1st floor.
+summary(TD_floor_error)
+#Most PhoneID = 20 (6/28) and phoneid= 13 (6/28) and phoneid= 5 (6/28)
+#5 /28 errors with max WAP037
+summary(wifilocation_validation_grouped_TD$PHONEID) #Most lectures 13 and 20.
+summary(wifilocation_grouped_TD$PHONEID) #In training no 20 or 5, some 13
+
+ggplot(wifilocation_validation_grouped_TD, aes(x=LONGITUDE,y=LATITUDE,color=FLOOR_error)) +
+  ggtitle("Errors in FLOOR")+
+  labs(x='Longitude', y='Latitude') +
+  geom_point(data=wifilocation_grouped_TD[wifilocation_grouped_TD$PHONEID==13,],color="grey") +
+  geom_point() +
+  geom_point(data=TD_floor_error[TD_floor_error$PHONEID==13,],color="black") +
+  facet_wrap("FLOOR")
+#errors with phone 13 not in the zones where phone 13 was used for training.
+ggplot(wifilocation_validation_grouped_TD, aes(x=LONGITUDE,y=LATITUDE,color=FLOOR_error)) +
+  ggtitle("Errors in FLOOR")+
+  labs(x='Longitude', y='Latitude') +
+  geom_point() +
+  geom_point(data=TD_floor_error[TD_floor_error$max_wap=="WAP037",],color="black") +
+  facet_wrap("FLOOR")
+#errors with maxWAP037 ground ans Second probably is located first.
+wap_loc["WAP037",] #at first floor.
+
+#Latitude TD
+ggplot(wifilocation_validation_grouped_TD[order(wifilocation_validation_grouped_TD$LL_error),], aes(x=LONGITUDE,y=LATITUDE,color=LL_error)) +
+  ggtitle("Errors in Longitude and Latitude for TD building")+
   labs(x='Longitude', y='Latitude') +
   geom_segment(aes(xend=LONGITUDE_pred,yend=LATITUDE_pred),arrow=arrow(length = unit(0.02,"npc"),type = "closed")) +
   scale_color_gradient2(high="red", low="blue",mid="white")+
   theme_dark()+
-  facet_wrap("FLOOR")
+  facet_grid(.~FLOOR)
+#no much difference between phones
+ggplot(wifilocation_validation_grouped_TD[order(wifilocation_validation_grouped_TD$LL_error),], aes(x=LONGITUDE,y=LATITUDE)) +
+  ggtitle("Error in Predictions for Building TD")+
+  labs(x='Longitude', y='Latitude') +
+#  geom_point(data=wifilocation_validation_grouped_TD[wifilocation_validation_grouped_TD$PHONEID==13,],aes(x=LONGITUDE,y=LATITUDE),colour="black",size=4)+
+  geom_point(data=wifilocation_validation_grouped_TD[wifilocation_validation_grouped_TD$PHONEID==20,],aes(x=LONGITUDE,y=LATITUDE),colour="black",size=4)+
+#  geom_point(data=wifilocation_validation_grouped_TD[wifilocation_validation_grouped_TD$PHONEID==5,],aes(x=LONGITUDE,y=LATITUDE),colour="grey",size=4)+
+  geom_point(data=wifilocation_validation_low4[wifilocation_validation_low4$BUILDINGID=="TD",],aes(x=LONGITUDE,y=LATITUDE),colour="blue",size=4)+
+  geom_point(aes(shape=FLOOR_error,color=LL_error),size=2)+
+  geom_segment(aes(xend=LONGITUDE_pred,yend=LATITUDE_pred,color=LL_error),arrow=arrow(length = unit(0.02,"npc"),type = "closed")) +
+  scale_color_gradient2(high="red", low="blue",mid="white")+
+  theme_dark()+
+  facet_grid(.~FLOOR)
+#5 and 13 phone not influent
 
-
-#Floor TD
+#Floor TC
 ggplot(wifilocation_validation_grouped_TC, aes(x=LONGITUDE,y=LATITUDE,color=FLOOR_error)) +
-  ggtitle("Errors in FLOOR")+
+  ggtitle("Errors in Floor for TC Building")+
   labs(x='Longitude', y='Latitude') +
   geom_point() +
-  facet_wrap("FLOOR")
+  facet_grid(.~FLOOR)+
+  theme_dark()
 TC_floor_error <- wifilocation_validation_grouped_TC %>%
   filter (FLOOR_error!=0) %>%
   select(FLOOR_error,max_val,max_wap,PHONEID)
@@ -2241,63 +2497,44 @@ summary(TC_floor_error)
 summary(wifilocation_validation_grouped_TC$PHONEID) #Most lectures 13 and 20.
 summary(wifilocation_grouped_TC$PHONEID) #Most lectures with phones 13 and 14.in training
 
-#Longitude TD
-ggplot(wifilocation_validation_grouped_TD, aes(x=LONGITUDE,y=LATITUDE,color=LONGITUDE_error)) +
-  ggtitle("Errors in Longitude")+
-  labs(x='Longitude', y='Latitude') +
-  geom_point() +
-  scale_color_gradient2(high="red", low="blue",mid="white")+
-  theme_dark()+
-  facet_wrap("FLOOR")
-#Latitude TD
-ggplot(wifilocation_validation_grouped_TD, aes(x=LONGITUDE,y=LATITUDE,color=LATITUDE_error)) +
-  ggtitle("Errors in Latitude")+
-  labs(x='Longitude', y='Latitude') +
-  geom_point() +
-  scale_color_gradient2(high="red", low="blue",mid="white")+
-  theme_dark()+
-  facet_wrap("FLOOR")
-#Longitude and Latitude TD
-ggplot(wifilocation_validation_grouped_TD, aes(x=LONGITUDE,y=LATITUDE,color=LL_error)) +
-  ggtitle("Errors in Longitude and Latitude")+
-  labs(x='Longitude', y='Latitude') +
-  geom_point() +
-  scale_color_gradient(high="red",low="blue")+
-  theme_dark()+
-  facet_wrap("FLOOR")
-ggplot(wifilocation_validation_grouped_TD[order(wifilocation_validation_grouped_TD$LL_error),], aes(x=LONGITUDE,y=LATITUDE,color=LL_error)) +
-  ggtitle("Errors in Longitude")+
-  labs(x='Longitude', y='Latitude') +
-  geom_segment(aes(xend=LONGITUDE_pred,yend=LATITUDE_pred),arrow=arrow(length = unit(0.02,"npc"),type = "closed")) +
-  scale_color_gradient2(high="red", low="blue",mid="white")+
-  theme_dark()+
-  facet_wrap("FLOOR")
-ggplot(wifilocation_validation_grouped_TD, aes(x=PHONEID,y=LL_error))+
-  geom_boxplot()
-#no much difference between phones
-ggplot(wifilocation_validation_grouped_TD[order(wifilocation_validation_grouped_TD$LL_error),], aes(x=LONGITUDE,y=LATITUDE,color=PHONEID)) +
-  ggtitle("Errors in Longitude")+
-  labs(x='Longitude', y='Latitude') +
-  geom_point(aes(color=PHONEID))+
-  theme_dark()+
-  facet_wrap("FLOOR")
-
-#Floor TC
-ggplot(wifilocation_validation_grouped_TC, aes(x=LONGITUDE,y=LATITUDE,color=FLOOR_pred_bad)) +
+ggplot(wifilocation_validation_grouped_TC, aes(x=LONGITUDE,y=LATITUDE,color=FLOOR_error)) +
   ggtitle("Errors in FLOOR")+
   labs(x='Longitude', y='Latitude') +
+  geom_point(data=wifilocation_grouped_TC[wifilocation_grouped_TC$PHONEID==13,],color="grey") +
   geom_point() +
+  geom_point(data=TC_floor_error[TC_floor_error$PHONEID==13,],color="black") +
   facet_wrap("FLOOR")
-#Longitude TC
-ggplot(wifilocation_validation_grouped_TC[order(wifilocation_validation_grouped_TD$LONGITUDE_error),], aes(x=LONGITUDE,y=LATITUDE,color=LONGITUDE_error)) +
-  ggtitle("Errors in Longitude")+
+#errors with phone 13 not in the zones where phone 13 was used for training.
+ggplot(wifilocation_validation_grouped_TC, aes(x=LONGITUDE,y=LATITUDE,color=FLOOR_error)) +
+  ggtitle("Errors in FLOOR")+
   labs(x='Longitude', y='Latitude') +
-  geom_segment(aes(xend=LONGITUDE_pred,yend=LATITUDE),arrow=arrow(length = unit(0.02,"npc"),type = "closed")) +
+  geom_point(data=wifilocation_grouped_TC[wifilocation_grouped_TC$PHONEID==14,],color="grey") +
+  geom_point() +
+  geom_point(data=TC_floor_error[TC_floor_error$PHONEID==14,],color="black") +
+  facet_wrap("FLOOR")
+#errors with phone 14 not in the zones where phone 14 was used for training, most 4th floor no training 
+
+#Longitude and latitude
+ggplot(wifilocation_validation_grouped_TC[order(wifilocation_validation_grouped_TC$LL_error),], aes(x=LONGITUDE,y=LATITUDE,color=LL_error)) +
+  ggtitle("Errors in Longitude and Latitude for TC Building")+
+  labs(x='Longitude', y='Latitude') +
+  geom_segment(aes(xend=LONGITUDE_pred2,yend=LATITUDE_pred),arrow=arrow(length = unit(0.02,"npc"),type = "closed")) +
   scale_color_gradient2(high="red", low="blue",mid="white")+
   theme_dark()+
-  facet_wrap("FLOOR")
+  facet_grid(.~FLOOR)
+ggplot(wifilocation_validation_grouped_TC[order(wifilocation_validation_grouped_TC$LL_error),], aes(x=LONGITUDE,y=LATITUDE)) +
+  ggtitle("Error in Predictions for Building TC")+
+  labs(x='Longitude', y='Latitude') +
+#  geom_point(data=wifilocation_validation_grouped_TC[wifilocation_validation_grouped_TC$PHONEID==13,],aes(x=LONGITUDE,y=LATITUDE),colour="purple",size=4)+
+  geom_point(data=wifilocation_validation_grouped_TC[wifilocation_validation_grouped_TC$PHONEID==20,],aes(x=LONGITUDE,y=LATITUDE),colour="black",size=4)+
+ # geom_point(data=wifilocation_validation_grouped_TC[wifilocation_validation_grouped_TC$PHONEID==14,],aes(x=LONGITUDE,y=LATITUDE),colour="grey",size=4)+
+  geom_point(data=wifilocation_validation_low4[wifilocation_validation_low4$BUILDINGID=="TC",],aes(x=LONGITUDE,y=LATITUDE),colour="blue",size=4)+
+  geom_point(aes(shape=FLOOR_error,color=LL_error),size=2)+
+  geom_segment(aes(xend=LONGITUDE_pred2,yend=LATITUDE_pred,color=LL_error),arrow=arrow(length = unit(0.02,"npc"),type = "closed")) +
+  scale_color_gradient2(high="red", low="blue",mid="white")+
+  theme_dark()+
+  facet_grid(.~FLOOR)
 
 
-#Plot real and predicted
 
 
