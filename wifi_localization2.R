@@ -166,8 +166,10 @@ ggplot(wifilocation,aes(x=LONGITUDE,y=LATITUDE)) +
   ggtitle("Training by days")+
   labs(x='Longitude', y='Latitude') +
   geom_point()+
-  facet_grid(FLOOR~as.factor(day(TIMESTAMP)))
+  facet_grid(FLOOR~as.factor(date(TIMESTAMP)))
 # all training for TC and TD same day, TI different days.
+table(date(wifilocation$TIMESTAMP),wifilocation$BUILDINGID)
+table(date(wifilocation_validation$TIMESTAMP),wifilocation_validation$BUILDINGID)
 
 #---------------------------------------------Data cleaning----------------------------------------------------
 #Remove WAPS only are in training or testing
@@ -1140,7 +1142,7 @@ ggplot(wifilocation_validation_grouped_TI, aes(x=LONGITUDE,y=LATITUDE)) +
 #OK, maybe 1 or 2 points out of the building
 plot(predictions_lon_knn_ti_pca, wifilocation_validation_grouped_TI_pca$LONGITUDE)
 abline(a=0,b=1,col="red")
-plot(density(wifilocation_validation_grouped_TI_pca$LONGITUDE-predictions_lon_knn_ti_pca))
+plot(density(wifilocation_validation_grouped_TI_pca$LONGITUDE-predictions_lon_knn_ti_pca),main="Error distribution Longitude TI")
  #ok, one small peak before -10
 load("lon_knn2_ti_pca.rda")
 predictions_lon_knn2_ti_pca <-predict(lon_knn2_ti_pca, wifilocation_validation_grouped_TI_pca)
@@ -1290,9 +1292,9 @@ ggplot(wifilocation_validation_grouped_TI, aes(x=LONGITUDE,y=LATITUDE)) +
   geom_point(colour="grey")+
   geom_point(aes(y=predictions_lat_knn_ti_pca,x=LONGITUDE,colour="red"))
 #Some out, but others overlay well
-plot(predictions_lat_knn_ti_pca, wifilocation_validation_grouped_TI_pca$LATITUDE)
+plot(predictions_lat_knn_ti_pca, wifilocation_validation_grouped_TI_pca$LATITUDE,main="Error distribution Latitude TI")
 abline(a=0,b=1,col="red")
-plot(density(wifilocation_validation_grouped_TI_pca$LATITUDE-predictions_lat_knn_ti_pca))
+plot(density(wifilocation_validation_grouped_TI_pca$LATITUDE-predictions_lat_knn_ti_pca),main="Error distribution Latitude TI")
 
 #latitude of TI svmRadial
 load("lat_svmr2_ti_pca.rda")
@@ -1505,7 +1507,7 @@ ggplot(wifilocation_validation_grouped_TD, aes(x=LONGITUDE,y=LATITUDE)) +
   geom_point(colour="grey")+
   geom_point(aes(x=predictions_lon_rf_td_pca,y=LATITUDE,colour="red"))
 #good overlay, some places out
-plot(density(wifilocation_validation_grouped_TD_pca$LONGITUDE-predictions_lon_rf_td_pca))
+plot(density(wifilocation_validation_grouped_TD_pca$LONGITUDE-predictions_lon_rf_td_pca), main="Error distribution Longitude TD")
 lines(density(wifilocation_validation_grouped_TD_pca$LONGITUDE-predictions_lon_knn_td_pca),col="red")
 
 #longitude of TD gbm
@@ -1708,7 +1710,7 @@ ggplot(wifilocation_validation_grouped_TD, aes(x=LONGITUDE,y=LATITUDE)) +
 plot(predictions_lat_gbm2_td_pca, wifilocation_validation_grouped_TD_pca$LATITUDE)
 abline(a=0,b=1,col="red")
 plot(density(wifilocation_validation_grouped_TD_pca$LATITUDE-predictions_lat_knn2_td_pca))
-lines(density(wifilocation_validation_grouped_TD_pca$LATITUDE-predictions_lat_gbm2_td_pca),col="red")
+plot(density(wifilocation_validation_grouped_TD_pca$LATITUDE-predictions_lat_gbm2_td_pca),main="Error distribution Latitude TD")
 
 ##Add predicted to valdation set and visualize, use gbm2
 wifilocation_validation_grouped_TD$LATITUDE_pred <- predictions_lat_gbm2_td_pca
@@ -1932,7 +1934,7 @@ ggplot(wifilocation_validation_grouped_TC, aes(x=LONGITUDE,y=LATITUDE)) +
   geom_point(colour="grey")+
   geom_point(aes(x=predictions_lon_knn3_tc_pca,y=LATITUDE,colour="red"))+
   facet_wrap("FLOOR")
-plot(density(wifilocation_validation_grouped_TC_pca$LONGITUDE-predictions_lon_knn3_tc_pca))
+plot(density(wifilocation_validation_grouped_TC_pca$LONGITUDE-predictions_lon_knn3_tc_pca),main="Error distribution Longitude TC")
 #good peak
 
 #longitude of TC knn using the predicted floor
@@ -2231,7 +2233,7 @@ ggplot(wifilocation_validation_grouped_TC, aes(x=LONGITUDE,y=LATITUDE)) +
   geom_point(aes(y=predictions_lat_rf_tc_pca,x=LONGITUDE,colour="red"))+
   facet_wrap("FLOOR")
 #a lot in the middle, still bad 4th but better than others
-plot(density(wifilocation_validation_grouped_TC_pca$LATITUDE-predictions_lat_rf_tc_pca))
+plot(density(wifilocation_validation_grouped_TC_pca$LATITUDE-predictions_lat_rf_tc_pca),main="Error distribution Latitude TC")
 
 #latitude of TD gbm
 load("lat_gbm_tc_pca.rda")
@@ -2357,7 +2359,7 @@ ggplot(wifilocation_validation_grouped_TI, aes(x=LONGITUDE,y=LATITUDE,color=FLOO
   ggtitle("Errors in Floor for Building TI")+
   labs(x='Longitude', y='Latitude') +
   geom_point() +
-  facet_grid(.~FLOOR)+
+  facet_grid(FLOOR~.)+
   theme_dark()
 
 TI_floor_error <- wifilocation_validation_grouped_TI %>%
@@ -2413,19 +2415,19 @@ ggplot(wifilocation_validation_grouped_TI[order(wifilocation_validation_grouped_
   geom_segment(aes(xend=LONGITUDE_pred,yend=LATITUDE_pred,color=LL_error),arrow=arrow(length = unit(0.02,"npc"),type = "closed")) +
   scale_color_gradient2(high="red", low="blue",mid="white")+
   theme_dark()+
-  facet_grid(.~FLOOR)
+  facet_grid(FLOOR~.)
 
 ggplot(wifilocation_validation_grouped_TI[order(wifilocation_validation_grouped_TI$LL_error),], aes(x=LONGITUDE,y=LATITUDE)) +
   ggtitle("Error in Predictions for Building TI")+
   labs(x='Longitude', y='Latitude') +
 #  geom_point(data=wifilocation_validation_grouped_TI[wifilocation_validation_grouped_TI$PHONEID==0,],aes(x=LONGITUDE,y=LATITUDE),colour="black",size=4)+
-  geom_point(data=wifilocation_validation_grouped_TI[wifilocation_validation_grouped_TI$PHONEID==20,],aes(x=LONGITUDE,y=LATITUDE),colour="blue",size=4)+
+  geom_point(data=wifilocation_validation_grouped_TI[wifilocation_validation_grouped_TI$PHONEID==20,],aes(x=LONGITUDE,y=LATITUDE),colour="black",size=4)+
   geom_point(data=wifilocation_validation_low4_ti,aes(x=LONGITUDE,y=LATITUDE),colour="blue",size=4)+
   geom_point(aes(shape=FLOOR_error,color=LL_error),size=2)+
   geom_segment(aes(xend=LONGITUDE_pred,yend=LATITUDE_pred,color=LL_error),arrow=arrow(length = unit(0.02,"npc"),type = "closed")) +
   scale_color_gradient2(high="red", low="blue",mid="white")+
   theme_dark()+
-  facet_grid(.~FLOOR)
+  facet_grid(FLOOR~.)
 
 
 #Floor TD
@@ -2433,7 +2435,7 @@ ggplot(wifilocation_validation_grouped_TD, aes(x=LONGITUDE,y=LATITUDE,color=FLOO
   ggtitle("Errors in Floor for TD Building")+
   labs(x='Longitude', y='Latitude') +
   geom_point() +
-  facet_grid(.~FLOOR)+
+  facet_grid(FLOOR~.)+
   theme_dark()
 #Ground floor most errors +1 and the Second floor most -1, probably WAPS high signal at 1st floor.
 summary(TD_floor_error)
@@ -2442,20 +2444,22 @@ summary(TD_floor_error)
 summary(wifilocation_validation_grouped_TD$PHONEID) #Most lectures 13 and 20.
 summary(wifilocation_grouped_TD$PHONEID) #In training no 20 or 5, some 13
 
-ggplot(wifilocation_validation_grouped_TD, aes(x=LONGITUDE,y=LATITUDE,color=FLOOR_error)) +
-  ggtitle("Errors in FLOOR")+
+ggplot(wifilocation_validation_grouped_TD, aes(x=LONGITUDE,y=LATITUDE)) +
+  ggtitle("Errors in FLOOR by phone 13")+
   labs(x='Longitude', y='Latitude') +
-  geom_point(data=wifilocation_grouped_TD[wifilocation_grouped_TD$PHONEID==13,],color="grey") +
-  geom_point() +
-  geom_point(data=TD_floor_error[TD_floor_error$PHONEID==13,],color="black") +
-  facet_wrap("FLOOR")
+  geom_point(data=wifilocation_grouped_TD[wifilocation_grouped_TD$PHONEID==13,],color="grey",size=3) +
+  geom_point(aes(shape=FLOOR_error)) +
+  geom_point(data=TD_floor_error[TD_floor_error$PHONEID==13,],color="red") +
+  facet_grid(FLOOR~.)+
+  theme_dark()
 #errors with phone 13 not in the zones where phone 13 was used for training.
-ggplot(wifilocation_validation_grouped_TD, aes(x=LONGITUDE,y=LATITUDE,color=FLOOR_error)) +
-  ggtitle("Errors in FLOOR")+
+ggplot(wifilocation_validation_grouped_TD, aes(x=LONGITUDE,y=LATITUDE)) +
+  ggtitle("Errors in FLOOR max_WAP=WAP037")+
   labs(x='Longitude', y='Latitude') +
-  geom_point() +
-  geom_point(data=TD_floor_error[TD_floor_error$max_wap=="WAP037",],color="black") +
-  facet_wrap("FLOOR")
+  geom_point(aes(shape=FLOOR_error)) +
+  geom_point(data=TD_floor_error[TD_floor_error$max_wap=="WAP037",],color="red") +
+  facet_grid(FLOOR~.)+
+  theme_dark()
 #errors with maxWAP037 ground ans Second probably is located first.
 wap_loc["WAP037",] #at first floor.
 
@@ -2466,7 +2470,7 @@ ggplot(wifilocation_validation_grouped_TD[order(wifilocation_validation_grouped_
   geom_segment(aes(xend=LONGITUDE_pred,yend=LATITUDE_pred),arrow=arrow(length = unit(0.02,"npc"),type = "closed")) +
   scale_color_gradient2(high="red", low="blue",mid="white")+
   theme_dark()+
-  facet_grid(.~FLOOR)
+  facet_grid(FLOOR~.)
 #no much difference between phones
 ggplot(wifilocation_validation_grouped_TD[order(wifilocation_validation_grouped_TD$LL_error),], aes(x=LONGITUDE,y=LATITUDE)) +
   ggtitle("Error in Predictions for Building TD")+
@@ -2479,7 +2483,7 @@ ggplot(wifilocation_validation_grouped_TD[order(wifilocation_validation_grouped_
   geom_segment(aes(xend=LONGITUDE_pred,yend=LATITUDE_pred,color=LL_error),arrow=arrow(length = unit(0.02,"npc"),type = "closed")) +
   scale_color_gradient2(high="red", low="blue",mid="white")+
   theme_dark()+
-  facet_grid(.~FLOOR)
+  facet_grid(FLOOR~.)
 #5 and 13 phone not influent
 
 #Floor TC
@@ -2487,7 +2491,7 @@ ggplot(wifilocation_validation_grouped_TC, aes(x=LONGITUDE,y=LATITUDE,color=FLOO
   ggtitle("Errors in Floor for TC Building")+
   labs(x='Longitude', y='Latitude') +
   geom_point() +
-  facet_grid(.~FLOOR)+
+  facet_grid(FLOOR~.)+
   theme_dark()
 TC_floor_error <- wifilocation_validation_grouped_TC %>%
   filter (FLOOR_error!=0) %>%
@@ -2497,21 +2501,23 @@ summary(TC_floor_error)
 summary(wifilocation_validation_grouped_TC$PHONEID) #Most lectures 13 and 20.
 summary(wifilocation_grouped_TC$PHONEID) #Most lectures with phones 13 and 14.in training
 
-ggplot(wifilocation_validation_grouped_TC, aes(x=LONGITUDE,y=LATITUDE,color=FLOOR_error)) +
-  ggtitle("Errors in FLOOR")+
+ggplot(wifilocation_validation_grouped_TC, aes(x=LONGITUDE,y=LATITUDE)) +
+  ggtitle("Errors in FLOOR by phone 13")+
   labs(x='Longitude', y='Latitude') +
-  geom_point(data=wifilocation_grouped_TC[wifilocation_grouped_TC$PHONEID==13,],color="grey") +
-  geom_point() +
-  geom_point(data=TC_floor_error[TC_floor_error$PHONEID==13,],color="black") +
-  facet_wrap("FLOOR")
+  geom_point(data=wifilocation_grouped_TC[wifilocation_grouped_TC$PHONEID==13,],color="grey",size=2) +
+  geom_point(aes(shape=FLOOR_error)) +
+  geom_point(data=TC_floor_error[TC_floor_error$PHONEID==13,],color="red") +
+  facet_grid(FLOOR~.)+
+  theme_dark()
 #errors with phone 13 not in the zones where phone 13 was used for training.
-ggplot(wifilocation_validation_grouped_TC, aes(x=LONGITUDE,y=LATITUDE,color=FLOOR_error)) +
-  ggtitle("Errors in FLOOR")+
+ggplot(wifilocation_validation_grouped_TC, aes(x=LONGITUDE,y=LATITUDE)) +
+  ggtitle("Errors in FLOOR by phone 14")+
   labs(x='Longitude', y='Latitude') +
-  geom_point(data=wifilocation_grouped_TC[wifilocation_grouped_TC$PHONEID==14,],color="grey") +
-  geom_point() +
-  geom_point(data=TC_floor_error[TC_floor_error$PHONEID==14,],color="black") +
-  facet_wrap("FLOOR")
+  geom_point(data=wifilocation_grouped_TC[wifilocation_grouped_TC$PHONEID==14,],color="grey",size=2) +
+  geom_point(aes(shape=FLOOR_error)) +
+  geom_point(data=TC_floor_error[TC_floor_error$PHONEID==14,],color="red") +
+  facet_grid(FLOOR~.)+
+  theme_dark()
 #errors with phone 14 not in the zones where phone 14 was used for training, most 4th floor no training 
 
 #Longitude and latitude
@@ -2521,7 +2527,7 @@ ggplot(wifilocation_validation_grouped_TC[order(wifilocation_validation_grouped_
   geom_segment(aes(xend=LONGITUDE_pred2,yend=LATITUDE_pred),arrow=arrow(length = unit(0.02,"npc"),type = "closed")) +
   scale_color_gradient2(high="red", low="blue",mid="white")+
   theme_dark()+
-  facet_grid(.~FLOOR)
+  facet_grid(FLOOR~.)
 ggplot(wifilocation_validation_grouped_TC[order(wifilocation_validation_grouped_TC$LL_error),], aes(x=LONGITUDE,y=LATITUDE)) +
   ggtitle("Error in Predictions for Building TC")+
   labs(x='Longitude', y='Latitude') +
@@ -2533,7 +2539,7 @@ ggplot(wifilocation_validation_grouped_TC[order(wifilocation_validation_grouped_
   geom_segment(aes(xend=LONGITUDE_pred2,yend=LATITUDE_pred,color=LL_error),arrow=arrow(length = unit(0.02,"npc"),type = "closed")) +
   scale_color_gradient2(high="red", low="blue",mid="white")+
   theme_dark()+
-  facet_grid(.~FLOOR)
+  facet_grid(FLOOR~.)
 
 
 
